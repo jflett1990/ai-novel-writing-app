@@ -40,3 +40,13 @@ def create_tables():
 def drop_tables():
     """Drop all tables in the database. Use with caution!"""
     Base.metadata.drop_all(bind=engine)
+
+
+def init_db():
+    """Initialize the database by creating all tables."""
+    # Import all models to ensure they are registered with Base
+    from models import story, character, world_element, chapter, user
+
+    # Create all tables
+    create_tables()
+    print("Database initialized successfully!")
