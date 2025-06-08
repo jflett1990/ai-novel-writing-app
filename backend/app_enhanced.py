@@ -89,9 +89,21 @@ async def health_check():
     return {"status": "healthy"}
 
 
+# CRITICAL: Frontend-compatible features endpoint
+@app.get(f"{settings.api_v1_prefix}/features")
+async def get_frontend_features():
+    """Get feature availability for frontend (matches expected API format)."""
+    return {
+        "enhanced_generation": True,
+        "multi_pass_generation": True,
+        "quality_analysis": True,
+        "custom_prompting": True
+    }
+
+
 @app.get("/features")
 async def get_features():
-    """Get information about available features."""
+    """Get detailed information about available features."""
     return {
         "standard_generation": {
             "description": "Original generation methods",
