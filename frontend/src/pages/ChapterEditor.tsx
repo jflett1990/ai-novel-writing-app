@@ -25,6 +25,8 @@ import {
   FormControl,
   InputLabel,
   Select,
+  Snackbar,
+  Fab,
 } from '@mui/material';
 import {
   Save,
@@ -37,12 +39,34 @@ import {
   FormatSize,
   Palette,
   Settings,
+  Speed,
+  HighQuality,
+  Analytics,
+  Refresh,
 } from '@mui/icons-material';
-import { storyApi, generationApi, Story, Chapter, ChapterExpandRequest } from '../services/api';
+import { 
+  storyApi, 
+  generationApi, 
+  Story, 
+  Chapter, 
+  ChapterExpandRequest,
+  GenerationMode,
+  EnhancedGenerationRequest,
+  FeatureAvailabilityResponse,
+  QualityAnalysisResponse,
+  MultiPassGenerationResponse,
+} from '../services/api';
+
+// Import our new components
+import EnhancedGenerationControls from '../components/EnhancedGenerationControls';
+import QualityIndicator from '../components/QualityIndicator';
+import ChapterAnalysis from '../components/ChapterAnalysis';
 
 const ChapterEditor: React.FC = () => {
   const { id, chapterNumber } = useParams<{ id: string; chapterNumber: string }>();
   const navigate = useNavigate();
+  
+  // Basic state
   const [story, setStory] = useState<Story | null>(null);
   const [chapter, setChapter] = useState<Chapter | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,7 +75,22 @@ const ChapterEditor: React.FC = () => {
   const [editMode, setEditMode] = useState(false);
   const [editedContent, setEditedContent] = useState('');
 
-  // Chapter expansion state
+  // Enhanced generation state
+  const [generationMode, setGenerationMode] = useState<GenerationMode>('standard');
+  const [targetWordCount, setTargetWordCount] = useState(2500);
+  const [qualityCheck, setQualityCheck] = useState(true);
+  const [featuresAvailable, setFeaturesAvailable] = useState<FeatureAvailabilityResponse>({
+    enhanced_generation: false,
+    multi_pass_generation: false,
+    quality_analysis: false,
+    custom_prompting: false,
+  });
+
+  // Multi-pass generation state
+  const [multiPassGenerating, setMultiPassGenerating] = useState(false);
+  const [lastGenerationResult, setLastGenerationResult] = useState<MultiPassGenerationResponse | null>(null);
+
+  // Chapter expansion state (keeping existing functionality)
   const [expandMenuAnchor, setExpandMenuAnchor] = useState<null | HTMLElement>(null);
   const [expanding, setExpanding] = useState(false);
   const [expandDialogOpen, setExpandDialogOpen] = useState(false);
@@ -59,11 +98,33 @@ const ChapterEditor: React.FC = () => {
   const [customPrompt, setCustomPrompt] = useState('');
   const [targetLength, setTargetLength] = useState<number | ''>('');
 
+  // UI state
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+
+  // Load data on component mount
   useEffect(() => {
     if (id && chapterNumber) {
       loadChapterData(parseInt(id), parseInt(chapterNumber));
+      checkFeatureAvailability();
     }
   }, [id, chapterNumber]);
+
+  const checkFeatureAvailability = async () => {
+    try {
+      const features = await generationApi.getFeatures();
+      setFeaturesAvailable(features);
+      
+      // Default to enhanced mode if available
+      if (features.enhanced_generation) {
+        setGenerationMode('enhanced');
+      }
+    } catch (error) {
+      console.warn('Could not check feature availability:', error);
+      // Gracefully degrade to standard mode
+      setGenerationMode('standard');
+    }
+  };
 
   const loadChapterData = async (storyId: number, chapterNum: number) => {
     try {
@@ -76,6 +137,8 @@ const ChapterEditor: React.FC = () => {
       setEditedContent(chapterData.content || '');
     } catch (error) {
       console.error('Failed to load chapter data:', error);
+      setSnackbarMessage('Failed to load chapter data');
+      setSnackbarOpen(true);
     } finally {
       setLoading(false);
     }
@@ -93,8 +156,12 @@ const ChapterEditor: React.FC = () => {
       );
       setChapter(updatedChapter);
       setEditMode(false);
+      setSnackbarMessage('Chapter saved successfully');
+      setSnackbarOpen(true);
     } catch (error) {
       console.error('Failed to save chapter:', error);
+      setSnackbarMessage('Failed to save chapter');
+      setSnackbarOpen(true);
     } finally {
       setSaving(false);
     }
@@ -105,18 +172,104 @@ const ChapterEditor: React.FC = () => {
 
     setGenerating(true);
     try {
-      const result = await generationApi.generateChapter(story.story_id, chapter.number);
-      if (result.success) {
-        // Reload chapter data
-        await loadChapterData(story.story_id, chapter.number);
+      if (generationMode === 'enhanced' && featuresAvailable.enhanced_generation) {
+        // Use enhanced generation
+        const request: EnhancedGenerationRequest = {
+          target_word_count: targetWordCount,
+          quality_check: qualityCheck,
+        };
+
+        const result = await generationApi.generateChapterEnhanced(
+          story.story_id, 
+          chapter.number, 
+          request
+        );
+
+        if (result.success && result.chapter_content) {
+          setEditedContent(result.chapter_content);
+          setChapter(prev => prev ? { 
+            ...prev, 
+            content: result.chapter_content!,
+            word_count: result.word_count || prev.word_count,
+            quality_score: result.quality_score,
+          } : null);
+          setEditMode(true);
+          setSnackbarMessage(`Chapter generated successfully! Quality: ${result.quality_score ? (result.quality_score * 100).toFixed(0) + '%' : 'N/A'}`);
+          setSnackbarOpen(true);
+        } else {
+          throw new Error(result.error || 'Enhanced generation failed');
+        }
+      } else {
+        // Use standard generation
+        const result = await generationApi.generateChapter(story.story_id, chapter.number);
+        if (result.success) {
+          // Reload chapter data
+          await loadChapterData(story.story_id, chapter.number);
+          setSnackbarMessage('Chapter generated successfully');
+          setSnackbarOpen(true);
+        }
       }
     } catch (error) {
       console.error('Failed to generate chapter:', error);
+      setSnackbarMessage('Failed to generate chapter');
+      setSnackbarOpen(true);
     } finally {
       setGenerating(false);
     }
   };
 
+  const handleMultiPassGenerate = async () => {
+    if (!story || !chapter || !featuresAvailable.multi_pass_generation) return;
+
+    setMultiPassGenerating(true);
+    try {
+      const request: EnhancedGenerationRequest = {
+        target_word_count: targetWordCount,
+        quality_check: true, // Always enable for multi-pass
+      };
+
+      const result = await generationApi.generateChapterMultiPass(
+        story.story_id, 
+        chapter.number, 
+        request
+      );
+
+      if (result.success && result.chapter_content) {
+        setEditedContent(result.chapter_content);
+        setChapter(prev => prev ? { 
+          ...prev, 
+          content: result.chapter_content!,
+          word_count: result.word_count || prev.word_count,
+          quality_score: result.quality_score,
+        } : null);
+        setLastGenerationResult(result);
+        setEditMode(true);
+        setSnackbarMessage(
+          `High-quality chapter generated in ${result.passes_completed} passes! ` +
+          `Quality: ${result.quality_score ? (result.quality_score * 100).toFixed(0) + '%' : 'N/A'}`
+        );
+        setSnackbarOpen(true);
+      } else {
+        throw new Error(result.error || 'Multi-pass generation failed');
+      }
+    } catch (error) {
+      console.error('Failed to generate chapter with multi-pass:', error);
+      setSnackbarMessage('Failed to generate high-quality chapter');
+      setSnackbarOpen(true);
+    } finally {
+      setMultiPassGenerating(false);
+    }
+  };
+
+  const handleAnalyzeQuality = async (): Promise<QualityAnalysisResponse> => {
+    if (!story || !chapter) {
+      throw new Error('Story or chapter not available');
+    }
+
+    return await generationApi.analyzeChapterQuality(story.story_id, chapter.number);
+  };
+
+  // Keep existing expand functionality
   const handleExpandChapter = async (type: 'enhance' | 'lengthen' | 'detail' | 'prose') => {
     if (!story || !chapter) return;
 
@@ -133,13 +286,20 @@ const ChapterEditor: React.FC = () => {
       const result = await generationApi.expandChapter(story.story_id, chapter.number, expandRequest);
 
       if (result.success && result.expanded_content) {
-        // Update the chapter content with expanded version
         setEditedContent(result.expanded_content);
-        setChapter(prev => prev ? { ...prev, content: result.expanded_content!, word_count: result.expanded_word_count || prev.word_count } : null);
-        setEditMode(true); // Enter edit mode to review the expansion
+        setChapter(prev => prev ? { 
+          ...prev, 
+          content: result.expanded_content!, 
+          word_count: result.expanded_word_count || prev.word_count 
+        } : null);
+        setEditMode(true);
+        setSnackbarMessage('Chapter expanded successfully');
+        setSnackbarOpen(true);
       }
     } catch (error) {
       console.error('Failed to expand chapter:', error);
+      setSnackbarMessage('Failed to expand chapter');
+      setSnackbarOpen(true);
     } finally {
       setExpanding(false);
       setExpandDialogOpen(false);
@@ -207,6 +367,13 @@ const ChapterEditor: React.FC = () => {
             {chapter.is_approved && (
               <Chip label="Approved" color="primary" size="small" />
             )}
+            {chapter.quality_score && (
+              <Chip 
+                label={`Quality: ${(chapter.quality_score * 100).toFixed(0)}%`} 
+                color="info" 
+                size="small" 
+              />
+            )}
           </Box>
           
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
@@ -214,26 +381,69 @@ const ChapterEditor: React.FC = () => {
           </Typography>
         </Box>
 
+        {/* Enhanced Generation Controls */}
+        {!chapter.content && (
+          <EnhancedGenerationControls
+            generationMode={generationMode}
+            onGenerationModeChange={setGenerationMode}
+            targetWordCount={targetWordCount}
+            onTargetWordCountChange={setTargetWordCount}
+            qualityCheck={qualityCheck}
+            onQualityCheckChange={setQualityCheck}
+            enhancedAvailable={featuresAvailable.enhanced_generation}
+            loading={generating || multiPassGenerating}
+            qualityScore={chapter.quality_score}
+          />
+        )}
+
         <Grid container spacing={3}>
           {/* Main Editor */}
           <Grid size={{ xs: 12, md: 9 }}>
             <Paper sx={{ p: 3 }}>
               {/* Toolbar */}
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Typography variant="h6">
-                  Content ({wordCount} words)
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Typography variant="h6">
+                    Content ({wordCount.toLocaleString()} words)
+                  </Typography>
+                  
+                  {chapter.quality_score && (
+                    <QualityIndicator
+                      qualityScore={chapter.quality_score}
+                      wordCount={wordCount}
+                      targetWordCount={targetWordCount}
+                      passesCompleted={lastGenerationResult?.passes_completed}
+                      generationTime={lastGenerationResult?.generation_time}
+                      modelUsed={lastGenerationResult?.model_used}
+                      compact
+                    />
+                  )}
+                </Box>
                 
                 <Box sx={{ display: 'flex', gap: 1 }}>
                   {!chapter.content && (
-                    <Button
-                      variant="contained"
-                      startIcon={<AutoAwesome />}
-                      onClick={handleGenerate}
-                      disabled={generating}
-                    >
-                      {generating ? 'Generating...' : 'Generate with AI'}
-                    </Button>
+                    <>
+                      <Button
+                        variant="contained"
+                        startIcon={generating ? <CircularProgress size={16} /> : <AutoAwesome />}
+                        onClick={handleGenerate}
+                        disabled={generating || multiPassGenerating}
+                      >
+                        {generating ? 'Generating...' : `Generate ${generationMode === 'enhanced' ? '(Enhanced)' : ''}`}
+                      </Button>
+                      
+                      {featuresAvailable.multi_pass_generation && (
+                        <Button
+                          variant="contained"
+                          color="secondary"
+                          startIcon={multiPassGenerating ? <CircularProgress size={16} /> : <HighQuality />}
+                          onClick={handleMultiPassGenerate}
+                          disabled={generating || multiPassGenerating}
+                        >
+                          {multiPassGenerating ? 'Generating...' : 'High Quality'}
+                        </Button>
+                      )}
+                    </>
                   )}
                   
                   {chapter.content && !editMode && (
@@ -283,7 +493,7 @@ const ChapterEditor: React.FC = () => {
               <Divider sx={{ mb: 3 }} />
               
               {/* Content Area */}
-              {!chapter.content && !generating ? (
+              {!chapter.content && !generating && !multiPassGenerating ? (
                 <Box sx={{ textAlign: 'center', py: 8 }}>
                   <Typography variant="h6" color="text.secondary" gutterBottom>
                     No content yet
@@ -295,7 +505,7 @@ const ChapterEditor: React.FC = () => {
                     variant="contained"
                     startIcon={<AutoAwesome />}
                     onClick={handleGenerate}
-                    disabled={generating}
+                    disabled={generating || multiPassGenerating}
                   >
                     Generate with AI
                   </Button>
@@ -335,40 +545,65 @@ const ChapterEditor: React.FC = () => {
 
           {/* Sidebar */}
           <Grid size={{ xs: 12, md: 3 }}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Chapter Info
-                </Typography>
-                
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="caption" color="text.secondary">
-                    Word Count
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {/* Chapter Info */}
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Chapter Info
                   </Typography>
-                  <Typography variant="body1">
-                    {chapter.word_count || wordCount}
-                  </Typography>
-                </Box>
-                
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="caption" color="text.secondary">
-                    Status
-                  </Typography>
-                  <Typography variant="body1">
-                    {chapter.is_generated ? 'Generated' : 'Draft'}
-                  </Typography>
-                </Box>
-                
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="caption" color="text.secondary">
-                    Last Updated
-                  </Typography>
-                  <Typography variant="body1">
-                    {chapter.updated_at ? new Date(chapter.updated_at).toLocaleDateString() : 'Never'}
-                  </Typography>
-                </Box>
-              </CardContent>
-            </Card>
+                  
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Word Count
+                    </Typography>
+                    <Typography variant="body1">
+                      {chapter.word_count || wordCount}
+                    </Typography>
+                  </Box>
+                  
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Status
+                    </Typography>
+                    <Typography variant="body1">
+                      {chapter.is_generated ? 'Generated' : 'Draft'}
+                    </Typography>
+                  </Box>
+                  
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Last Updated
+                    </Typography>
+                    <Typography variant="body1">
+                      {chapter.updated_at ? new Date(chapter.updated_at).toLocaleDateString() : 'Never'}
+                    </Typography>
+                  </Box>
+                </CardContent>
+              </Card>
+
+              {/* Quality Metrics */}
+              {chapter.quality_score && (
+                <QualityIndicator
+                  qualityScore={chapter.quality_score}
+                  wordCount={wordCount}
+                  targetWordCount={targetWordCount}
+                  passesCompleted={lastGenerationResult?.passes_completed}
+                  generationTime={lastGenerationResult?.generation_time}
+                  modelUsed={lastGenerationResult?.model_used}
+                />
+              )}
+
+              {/* Chapter Analysis */}
+              {chapter.content && featuresAvailable.quality_analysis && (
+                <ChapterAnalysis
+                  storyId={story.story_id}
+                  chapterNumber={chapter.number}
+                  onAnalyze={handleAnalyzeQuality}
+                  loading={generating || multiPassGenerating}
+                />
+              )}
+            </Box>
           </Grid>
         </Grid>
       </Box>
@@ -479,6 +714,14 @@ const ChapterEditor: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={() => setSnackbarOpen(false)}
+        message={snackbarMessage}
+      />
     </Container>
   );
 };
