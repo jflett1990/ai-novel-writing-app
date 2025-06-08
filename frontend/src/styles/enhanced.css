@@ -1,0 +1,170 @@
+/* Enhanced Generation UI Styles */
+
+/* Enhanced generation card styling */
+.enhanced-generation {
+  border-left: 4px solid #3b82f6 !important;
+  background: linear-gradient(90deg, #f8fafc 0%, #e2e8f0 100%) !important;
+  transition: all 0.3s ease;
+}
+
+.enhanced-generation:hover {
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+}
+
+/* Quality bar animations */
+.quality-bar {
+  height: 8px;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.quality-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* Generation mode toggle styling */
+.generation-mode-toggle {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.generation-mode-toggle .MuiFormControlLabel-root {
+  margin: 0;
+  padding: 12px 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  background: white;
+}
+
+.generation-mode-toggle .MuiFormControlLabel-root:hover {
+  border-color: #3b82f6;
+  background: #f8fafc;
+}
+
+.generation-mode-toggle .MuiFormControlLabel-root.Mui-checked {
+  border-color: #3b82f6;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  color: white;
+}
+
+/* Quality indicator compact styling */
+.quality-indicator-compact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: 16px;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+/* Chapter analysis accordion styling */
+.chapter-analysis .MuiCollapse-root {
+  transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.chapter-analysis .analysis-metric {
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  text-align: center;
+  transition: transform 0.2s ease;
+}
+
+.chapter-analysis .analysis-metric:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Multi-pass generation progress indicator */
+.multi-pass-progress {
+  position: relative;
+  margin: 16px 0;
+}
+
+.multi-pass-progress .progress-step {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  margin: 0 4px;
+  transition: all 0.3s ease;
+}
+
+.multi-pass-progress .progress-step.active {
+  background: #3b82f6;
+  transform: scale(1.2);
+}
+
+.multi-pass-progress .progress-step.completed {
+  background: #22c55e;
+}
+
+/* Enhanced button styling */
+.enhanced-btn {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  border: none;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  text-transform: none;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.enhanced-btn:hover {
+  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.enhanced-btn:active {
+  transform: translateY(0);
+}
+
+.enhanced-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.enhanced-btn:hover::before {
+  left: 100%;
+}
+
+/* Quality score display */
+.quality-score-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e2e8f0;
+}
