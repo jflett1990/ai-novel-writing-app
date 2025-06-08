@@ -13,7 +13,6 @@ import {
   Collapse,
   Alert,
   CircularProgress,
-  Divider,
   LinearProgress,
 } from '@mui/material';
 import {
@@ -22,10 +21,8 @@ import {
   ExpandLess,
   CheckCircle,
   Warning,
-  Error,
   Lightbulb,
   Assessment,
-  TrendingUp,
   FormatQuote,
   Article,
 } from '@mui/icons-material';
@@ -249,7 +246,7 @@ const ChapterAnalysis: React.FC<ChapterAnalysisProps> = ({
                   </Typography>
                   
                   <List dense>
-                    {analysis.issues.map((issue, index) => (
+                    {analysis.issues.map((issue: string, index: number) => (
                       <ListItem key={index} sx={{ pl: 0 }}>
                         <ListItemIcon sx={{ minWidth: 36 }}>
                           {getSeverityIcon('issue')}
@@ -275,7 +272,7 @@ const ChapterAnalysis: React.FC<ChapterAnalysisProps> = ({
                   </Typography>
                   
                   <List dense>
-                    {analysis.suggestions.map((suggestion, index) => (
+                    {analysis.suggestions.map((suggestion: string, index: number) => (
                       <ListItem key={index} sx={{ pl: 0 }}>
                         <ListItemIcon sx={{ minWidth: 36 }}>
                           {getSeverityIcon('suggestion')}
