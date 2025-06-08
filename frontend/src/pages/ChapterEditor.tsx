@@ -14,6 +14,17 @@ import {
   Alert,
   CircularProgress,
   Divider,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  FormControl,
+  InputLabel,
+  Select,
 } from '@mui/material';
 import {
   Save,
@@ -21,8 +32,13 @@ import {
   ArrowBack,
   Edit,
   Visibility,
+  ExpandMore,
+  TrendingUp,
+  FormatSize,
+  Palette,
+  Settings,
 } from '@mui/icons-material';
-import { storyApi, generationApi, Story, Chapter } from '../services/api';
+import { storyApi, generationApi, Story, Chapter, ChapterExpandRequest } from '../services/api';
 
 const ChapterEditor: React.FC = () => {
   const { id, chapterNumber } = useParams<{ id: string; chapterNumber: string }>();
@@ -34,6 +50,14 @@ const ChapterEditor: React.FC = () => {
   const [generating, setGenerating] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editedContent, setEditedContent] = useState('');
+
+  // Chapter expansion state
+  const [expandMenuAnchor, setExpandMenuAnchor] = useState<null | HTMLElement>(null);
+  const [expanding, setExpanding] = useState(false);
+  const [expandDialogOpen, setExpandDialogOpen] = useState(false);
+  const [expansionType, setExpansionType] = useState<'enhance' | 'lengthen' | 'detail' | 'prose'>('enhance');
+  const [customPrompt, setCustomPrompt] = useState('');
+  const [targetLength, setTargetLength] = useState<number | ''>('');
 
   useEffect(() => {
     if (id && chapterNumber) {
@@ -78,7 +102,7 @@ const ChapterEditor: React.FC = () => {
 
   const handleGenerate = async () => {
     if (!story || !chapter) return;
-    
+
     setGenerating(true);
     try {
       const result = await generationApi.generateChapter(story.story_id, chapter.number);
@@ -91,6 +115,50 @@ const ChapterEditor: React.FC = () => {
     } finally {
       setGenerating(false);
     }
+  };
+
+  const handleExpandChapter = async (type: 'enhance' | 'lengthen' | 'detail' | 'prose') => {
+    if (!story || !chapter) return;
+
+    setExpanding(true);
+    setExpandMenuAnchor(null);
+
+    try {
+      const expandRequest: ChapterExpandRequest = {
+        expansion_type: type,
+        custom_prompt: customPrompt || undefined,
+        target_length: targetLength ? Number(targetLength) : undefined,
+      };
+
+      const result = await generationApi.expandChapter(story.story_id, chapter.number, expandRequest);
+
+      if (result.success && result.expanded_content) {
+        // Update the chapter content with expanded version
+        setEditedContent(result.expanded_content);
+        setChapter(prev => prev ? { ...prev, content: result.expanded_content!, word_count: result.expanded_word_count || prev.word_count } : null);
+        setEditMode(true); // Enter edit mode to review the expansion
+      }
+    } catch (error) {
+      console.error('Failed to expand chapter:', error);
+    } finally {
+      setExpanding(false);
+      setExpandDialogOpen(false);
+      setCustomPrompt('');
+      setTargetLength('');
+    }
+  };
+
+  const handleExpandMenuClick = (event: React.MouseEvent<HTMLElement>) => {
+    setExpandMenuAnchor(event.currentTarget);
+  };
+
+  const handleExpandMenuClose = () => {
+    setExpandMenuAnchor(null);
+  };
+
+  const handleCustomExpand = () => {
+    setExpandMenuAnchor(null);
+    setExpandDialogOpen(true);
   };
 
   const wordCount = editedContent ? editedContent.split(/\s+/).filter(word => word.length > 0).length : 0;
@@ -169,13 +237,23 @@ const ChapterEditor: React.FC = () => {
                   )}
                   
                   {chapter.content && !editMode && (
-                    <Button
-                      variant="outlined"
-                      startIcon={<Edit />}
-                      onClick={() => setEditMode(true)}
-                    >
-                      Edit
-                    </Button>
+                    <>
+                      <Button
+                        variant="outlined"
+                        startIcon={<Edit />}
+                        onClick={() => setEditMode(true)}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        startIcon={<TrendingUp />}
+                        onClick={handleExpandMenuClick}
+                        disabled={expanding}
+                      >
+                        {expanding ? 'Expanding...' : 'Expand Chapter'}
+                      </Button>
+                    </>
                   )}
                   
                   {editMode && (
@@ -294,6 +372,113 @@ const ChapterEditor: React.FC = () => {
           </Grid>
         </Grid>
       </Box>
+
+      {/* Expansion Menu */}
+      <Menu
+        anchorEl={expandMenuAnchor}
+        open={Boolean(expandMenuAnchor)}
+        onClose={handleExpandMenuClose}
+      >
+        <MenuItem onClick={() => handleExpandChapter('enhance')}>
+          <ListItemIcon>
+            <AutoAwesome fontSize="small" />
+          </ListItemIcon>
+          <ListItemText
+            primary="Enhance"
+            secondary="Improve prose quality and readability"
+          />
+        </MenuItem>
+        <MenuItem onClick={() => handleExpandChapter('lengthen')}>
+          <ListItemIcon>
+            <FormatSize fontSize="small" />
+          </ListItemIcon>
+          <ListItemText
+            primary="Lengthen"
+            secondary="Significantly expand content"
+          />
+        </MenuItem>
+        <MenuItem onClick={() => handleExpandChapter('detail')}>
+          <ListItemIcon>
+            <Visibility fontSize="small" />
+          </ListItemIcon>
+          <ListItemText
+            primary="Add Details"
+            secondary="Rich sensory descriptions"
+          />
+        </MenuItem>
+        <MenuItem onClick={() => handleExpandChapter('prose')}>
+          <ListItemIcon>
+            <Palette fontSize="small" />
+          </ListItemIcon>
+          <ListItemText
+            primary="Improve Prose"
+            secondary="Sophisticated language and style"
+          />
+        </MenuItem>
+        <Divider />
+        <MenuItem onClick={handleCustomExpand}>
+          <ListItemIcon>
+            <Settings fontSize="small" />
+          </ListItemIcon>
+          <ListItemText
+            primary="Custom Expansion"
+            secondary="Advanced options"
+          />
+        </MenuItem>
+      </Menu>
+
+      {/* Custom Expansion Dialog */}
+      <Dialog open={expandDialogOpen} onClose={() => setExpandDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Custom Chapter Expansion</DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 1 }}>
+            <FormControl fullWidth sx={{ mb: 3 }}>
+              <InputLabel>Expansion Type</InputLabel>
+              <Select
+                value={expansionType}
+                label="Expansion Type"
+                onChange={(e) => setExpansionType(e.target.value as any)}
+              >
+                <MenuItem value="enhance">Enhance - Improve prose quality</MenuItem>
+                <MenuItem value="lengthen">Lengthen - Expand content significantly</MenuItem>
+                <MenuItem value="detail">Detail - Add rich descriptions</MenuItem>
+                <MenuItem value="prose">Prose - Sophisticated language</MenuItem>
+              </Select>
+            </FormControl>
+
+            <TextField
+              fullWidth
+              label="Target Word Count (optional)"
+              type="number"
+              value={targetLength}
+              onChange={(e) => setTargetLength(e.target.value ? Number(e.target.value) : '')}
+              sx={{ mb: 3 }}
+              helperText="Leave empty for automatic length"
+            />
+
+            <TextField
+              fullWidth
+              label="Custom Instructions (optional)"
+              multiline
+              rows={3}
+              value={customPrompt}
+              onChange={(e) => setCustomPrompt(e.target.value)}
+              placeholder="e.g., Focus on building tension and adding dialogue..."
+              helperText="Specific instructions for the AI expansion"
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setExpandDialogOpen(false)}>Cancel</Button>
+          <Button
+            onClick={() => handleExpandChapter(expansionType)}
+            variant="contained"
+            disabled={expanding}
+          >
+            {expanding ? 'Expanding...' : 'Expand Chapter'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

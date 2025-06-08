@@ -207,6 +207,23 @@ export const storyApi = {
   },
 };
 
+export interface ChapterExpandRequest {
+  expansion_type?: 'enhance' | 'lengthen' | 'detail' | 'prose';
+  custom_prompt?: string;
+  target_length?: number;
+}
+
+export interface ChapterExpandResponse {
+  success: boolean;
+  expanded_content?: string;
+  original_word_count?: number;
+  expanded_word_count?: number;
+  tokens_used?: number;
+  model_used?: string;
+  error?: string;
+  error_type?: string;
+}
+
 export const generationApi = {
   // Generate outline
   generateOutline: async (storyId: number, data: GenerateOutlineRequest): Promise<any> => {
@@ -219,6 +236,12 @@ export const generationApi = {
     const response = await api.post(`/api/v1/generate/stories/${storyId}/chapters/${chapterNumber}`, {
       custom_prompt: customPrompt,
     });
+    return response.data;
+  },
+
+  // Expand chapter
+  expandChapter: async (storyId: number, chapterNumber: number, data: ChapterExpandRequest): Promise<ChapterExpandResponse> => {
+    const response = await api.post(`/api/v1/generate/stories/${storyId}/chapters/${chapterNumber}/expand`, data);
     return response.data;
   },
 

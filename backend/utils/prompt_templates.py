@@ -25,14 +25,14 @@ class PromptTemplates:
     ) -> str:
         """
         Generate prompt for story outline creation.
-        
+
         Args:
             story_title: Title of the story
             story_description: Story premise/description
             genre: Story genre
             target_chapters: Number of chapters to generate
-            context: Additional story context
-            
+            context: Additional story context including characters and world elements
+
         Returns:
             str: Formatted prompt for outline generation
         """
@@ -41,32 +41,85 @@ class PromptTemplates:
             "",
             f"STORY TITLE: {story_title}",
         ]
-        
+
         if story_description:
             prompt_parts.extend([
                 f"STORY PREMISE: {story_description}",
                 ""
             ])
-        
+
         if genre:
             prompt_parts.extend([
                 f"GENRE: {genre}",
                 ""
             ])
-        
+
+        # Add character information from context
+        if context.get("characters"):
+            prompt_parts.extend([
+                "",
+                "MAIN CHARACTERS TO INCORPORATE:",
+            ])
+            for char in context["characters"][:8]:  # Include up to 8 characters for outline
+                char_line = f"- {char['name']}"
+                if char.get("role"):
+                    char_line += f" ({char['role']})"
+                if char.get("personality"):
+                    char_line += f": {char['personality']}"
+                if char.get("motivations"):
+                    char_line += f" | Motivation: {char['motivations']}"
+                if char.get("arc"):
+                    char_line += f" | Arc: {char['arc']}"
+                prompt_parts.append(char_line)
+
+        # Add world elements from context
+        if context.get("world_elements"):
+            prompt_parts.extend([
+                "",
+                "WORLD/SETTING ELEMENTS TO INCORPORATE:",
+            ])
+            for element_type, elements in context["world_elements"].items():
+                if elements:
+                    for element in elements[:3]:  # Limit to top 3 per type
+                        element_line = f"- {element['name']} ({element_type})"
+                        if element.get("description"):
+                            element_line += f": {element['description'][:100]}..."
+                        prompt_parts.append(element_line)
+
+        # Add existing outline context if available
+        if context.get("outline"):
+            existing_chapters = [ch for ch in context["outline"] if ch.get("summary")]
+            if existing_chapters:
+                prompt_parts.extend([
+                    "",
+                    "EXISTING CHAPTERS TO BUILD UPON:",
+                ])
+                for ch in existing_chapters[:5]:  # Show first 5 existing chapters
+                    prompt_parts.append(f"- Chapter {ch['number']}: {ch.get('title', 'Untitled')} - {ch.get('summary', '')[:100]}...")
+
         prompt_parts.extend([
+            "",
             f"TARGET LENGTH: {target_chapters} chapters",
             "",
             "Create a compelling story with:",
             "- Character-driven plot that emerges from their choices and flaws",
             "- Genuine conflicts rooted in human complexity",
+            "- Character arcs that develop naturally through the story",
+            "- Integration of world elements and setting details",
             "- Surprising but logical story developments",
             "- Avoid overused tropes and predictable beats",
+            "",
+            "OUTLINE REQUIREMENTS:",
+            "- Ensure each character has meaningful involvement and development",
+            "- Weave character motivations into plot progression",
+            "- Include character conflicts and relationship dynamics",
+            "- Show how character arcs evolve across acts",
+            "- Incorporate world elements naturally into the story",
             "",
             "FORMAT YOUR RESPONSE EXACTLY AS:",
             "",
             "ACT I: [Act Title]",
-            "[Brief act summary]",
+            "[Brief act summary including key character introductions and conflicts]",
             "",
             "Chapter 1: [Chapter Title]",
             "[Chapter summary - 2-3 sentences describing what happens, who is involved, and what conflict occurs]",
@@ -77,19 +130,20 @@ class PromptTemplates:
             "[Continue for all chapters...]",
             "",
             "ACT II: [Act Title]",
-            "[Brief act summary]",
+            "[Brief act summary including character development and escalating conflicts]",
             "",
             "[Continue with Act II chapters...]",
             "",
             "ACT III: [Act Title]",
-            "[Brief act summary]",
+            "[Brief act summary including character resolutions and climax]",
             "",
             "[Continue with Act III chapters...]",
             "",
             "IMPORTANT: Every chapter MUST have a detailed summary. Do not leave any chapter summaries blank.",
-            "Focus on original storytelling that avoids clichés while creating a satisfying narrative arc."
+            "Focus on original storytelling that avoids clichés while creating a satisfying narrative arc.",
+            "Ensure all main characters have meaningful roles and development throughout the outline."
         ])
-        
+
         return "\n".join(prompt_parts)
     
     def get_chapter_prompt(
@@ -213,9 +267,9 @@ class PromptTemplates:
             "Write the complete chapter now. Focus on clarity and readability.",
             "",
             "FINAL REMINDER: Use periods to end sentences. Do not repeat words. Tell a clear story."
-        ])"
+        ])
 
-        
+
         return "\n".join(prompt_parts)
     
     def get_character_generation_prompt(
@@ -442,13 +496,20 @@ class PromptTemplates:
             "FORMAT YOUR RESPONSE EXACTLY AS:",
             "",
             "1. [Element Name]",
-            "Type: [Location/Organization/Culture/Technology/History/Custom]",
-            "Description: [Detailed description of what this is]",
-            "Significance: [Why this matters to the story]",
-            "Details: [Specific features, rules, or characteristics]",
-            "Story Impact: [How this affects characters or plot]",
+            "*Type: [Location/Organization/Culture/Technology/History/Custom]",
+            "*Description: [Detailed description of what this is]",
+            "*Significance: [Why this matters to the story]",
+            "*Details: [Specific features, rules, or characteristics]",
+            "*Story Impact: [How this affects characters or plot]",
             "",
             "2. [Element Name]",
+            "*Type: [Type]",
+            "*Description: [Description]",
+            "*Significance: [Significance]",
+            "*Details: [Details]",
+            "*Story Impact: [Story Impact]",
+            "",
+            "3. [Element Name]",
             "[Continue exact same format...]",
             "",
             f"Create exactly {element_count} world building elements that enrich the story."
@@ -524,6 +585,127 @@ class PromptTemplates:
         ])
 
         return "\n".join(prompt_parts)
+
+    def get_chapter_expansion_prompt(
+        self,
+        original_content: str,
+        story_context: Dict[str, Any],
+        expansion_type: str = "enhance",
+        target_length: Optional[int] = None,
+        custom_instruction: Optional[str] = None
+    ) -> str:
+        """
+        Generate prompt for expanding/enhancing existing chapter content.
+
+        Args:
+            original_content: The existing chapter content to expand
+            story_context: Story context for consistency
+            expansion_type: Type of expansion (enhance, lengthen, detail, prose)
+            target_length: Target word count for expanded version
+            custom_instruction: Custom expansion instruction
+
+        Returns:
+            str: Formatted prompt for chapter expansion
+        """
+        # Get expansion-specific instructions
+        expansion_instructions = self._get_expansion_instructions(expansion_type)
+
+        prompt_parts = [
+            "Expand and enhance the provided chapter content while maintaining narrative consistency, character voice, and thematic coherence. Focus on enriching the existing story rather than changing its fundamental direction. Add depth through sensory details, internal character thoughts, dialogue nuances, and atmospheric descriptions. Preserve the original plot points and character interactions while making them more vivid and engaging.",
+            "",
+            f"EXPANSION TYPE: {expansion_type.upper()}",
+            *expansion_instructions,
+            "",
+            "ENHANCEMENT GUIDELINES:",
+            "- Maintain the original story structure and key plot points",
+            "- Enhance character development and internal thoughts",
+            "- Add rich sensory details and atmospheric descriptions",
+            "- Improve dialogue with subtext and natural flow",
+            "- Deepen emotional resonance and character relationships",
+            "- Use varied sentence structures and sophisticated prose",
+            "- Avoid repetition or redundant descriptions",
+            "- Ensure smooth transitions between scenes",
+            ""
+        ]
+
+        if target_length:
+            prompt_parts.extend([
+                f"TARGET LENGTH: Approximately {target_length} words",
+                ""
+            ])
+
+        if custom_instruction:
+            prompt_parts.extend([
+                f"SPECIFIC INSTRUCTION: {custom_instruction}",
+                ""
+            ])
+
+        # Add story context for consistency
+        if story_context.get("story"):
+            story = story_context["story"]
+            prompt_parts.extend([
+                "STORY CONTEXT:",
+                f"Title: {story.get('title', 'Untitled')}",
+                f"Genre: {story.get('genre', 'Fiction')}",
+            ])
+            if story.get("description"):
+                prompt_parts.append(f"Premise: {story['description']}")
+
+        # Add character information for consistency
+        if story_context.get("characters"):
+            prompt_parts.extend([
+                "",
+                "CHARACTER CONSISTENCY:",
+            ])
+            for char in story_context["characters"][:5]:
+                char_line = f"- {char['name']}"
+                if char.get("personality"):
+                    char_line += f": {char['personality'][:100]}..."
+                prompt_parts.append(char_line)
+
+        prompt_parts.extend([
+            "",
+            "ORIGINAL CHAPTER CONTENT TO EXPAND:",
+            "=" * 50,
+            original_content,
+            "=" * 50,
+            "",
+            "EXPANDED CHAPTER:",
+            "Write the enhanced version of this chapter, maintaining all original plot points while significantly enriching the prose, character development, and atmospheric details. Focus on quality over quantity - every addition should serve the story."
+        ])
+
+        return "\n".join(prompt_parts)
+
+    def _get_expansion_instructions(self, expansion_type: str) -> List[str]:
+        """Get specific instructions based on expansion type."""
+        expansion_map = {
+            "enhance": [
+                "- Focus on improving prose quality and readability",
+                "- Add emotional depth and character insights",
+                "- Enhance dialogue with natural subtext",
+                "- Improve scene transitions and pacing"
+            ],
+            "lengthen": [
+                "- Significantly expand the content while maintaining quality",
+                "- Add new scenes or extend existing ones",
+                "- Develop character interactions and relationships",
+                "- Include more detailed world-building elements"
+            ],
+            "detail": [
+                "- Add rich sensory descriptions and atmospheric details",
+                "- Expand on character thoughts and motivations",
+                "- Include more specific environmental descriptions",
+                "- Develop the setting and mood more thoroughly"
+            ],
+            "prose": [
+                "- Focus on sophisticated language and varied sentence structure",
+                "- Improve rhythm and flow of the writing",
+                "- Enhance literary quality and style",
+                "- Use more evocative and precise word choices"
+            ]
+        }
+
+        return expansion_map.get(expansion_type, expansion_map["enhance"])
 
     def get_plot_twist_prompt(
         self,
