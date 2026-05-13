@@ -1,9 +1,9 @@
-"""
-Pydantic schemas for Story-related API endpoints.
-"""
-from pydantic import BaseModel, Field
-from typing import Optional, List
+"""Pydantic schemas for Story-related API endpoints."""
+
 from datetime import datetime
+from typing import List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class StoryBase(BaseModel):
@@ -31,17 +31,20 @@ class StoryUpdate(BaseModel):
 
 class ActResponse(BaseModel):
     """Schema for Act response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
     act_id: int
     number: int
     title: Optional[str]
     summary: Optional[str]
-    
-    class Config:
-        from_attributes = True
 
 
 class ChapterResponse(BaseModel):
     """Schema for Chapter response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
     chapter_id: int
     number: int
     title: Optional[str]
@@ -53,13 +56,13 @@ class ChapterResponse(BaseModel):
     act_id: Optional[int]
     created_at: datetime
     updated_at: Optional[datetime]
-    
-    class Config:
-        from_attributes = True
 
 
 class ChapterSummary(BaseModel):
     """Schema for Chapter summary (without content)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
     chapter_id: int
     number: int
     title: Optional[str]
@@ -68,32 +71,29 @@ class ChapterSummary(BaseModel):
     is_approved: bool
     word_count: int
     act_id: Optional[int]
-    
-    class Config:
-        from_attributes = True
 
 
 class StoryResponse(StoryBase):
     """Schema for Story response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
     story_id: int
     user_id: Optional[int]
     created_at: datetime
     updated_at: Optional[datetime]
-    
-    class Config:
-        from_attributes = True
 
 
 class StoryDetailResponse(StoryResponse):
     """Schema for detailed Story response with related data."""
-    acts: List[ActResponse] = []
-    chapters: List[ChapterSummary] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+    acts: List[ActResponse] = Field(default_factory=list)
+    chapters: List[ChapterSummary] = Field(default_factory=list)
     character_count: int = 0
     world_element_count: int = 0
     total_word_count: int = 0
-    
-    class Config:
-        from_attributes = True
 
 
 class ChapterCreate(BaseModel):

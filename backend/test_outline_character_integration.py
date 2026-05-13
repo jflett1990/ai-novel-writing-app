@@ -1,15 +1,25 @@
 #!/usr/bin/env python3
-"""
-Test script to verify that outline generation properly includes character context.
-This test validates the fix for the issue where outline generation was ignoring
-character information from the story context.
-"""
+"""Tests for outline generation that ensure character context is preserved."""
 
-import sys
 import os
+import sys
+from typing import Iterable, Tuple
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from utils.prompt_templates import PromptTemplates
+
+Check = Tuple[str, bool]
+
+
+def _log_and_assert(section: str, checks: Iterable[Check]) -> None:
+    """Log the check results and assert that each passes."""
+
+    print(section)
+    for check_name, result in checks:
+        status = "✅ PASS" if result else "❌ FAIL"
+        print(f"  {status}: {check_name}")
+        assert result, f"{section.strip()}: {check_name}"
 
 
 def test_outline_prompt_includes_characters():
@@ -82,7 +92,7 @@ def test_outline_prompt_includes_characters():
     print("Testing that outline generation includes character context...\n")
     
     # Check that character information is included
-    character_checks = [
+    character_checks: list[Check] = [
         ("Elena Blackthorne", "Elena Blackthorne" in prompt),
         ("Marcus Veil", "Marcus Veil" in prompt),
         ("Kira Stormwind", "Kira Stormwind" in prompt),
@@ -91,69 +101,40 @@ def test_outline_prompt_includes_characters():
         ("Character motivations", "Seeks to redeem herself" in prompt),
         ("Character arcs", "From guilt-ridden exile" in prompt),
     ]
-    
+
     # Check that world elements are included
-    world_checks = [
+    world_checks: list[Check] = [
         ("World elements section", "WORLD/SETTING ELEMENTS" in prompt),
         ("Shattered Citadel", "Shattered Citadel" in prompt),
         ("Order of Shadows", "Order of Shadows" in prompt),
     ]
-    
+
     # Check that existing outline is included
-    outline_checks = [
+    outline_checks: list[Check] = [
         ("Existing chapters section", "EXISTING CHAPTERS" in prompt),
         ("Chapter 1 reference", "Chapter 1: The Return" in prompt),
     ]
-    
+
     # Check that character-focused requirements are included
-    requirement_checks = [
+    requirement_checks: list[Check] = [
         ("Character development focus", "Character arcs that develop naturally through the story" in prompt),
         ("Character motivation integration", "character motivations into plot" in prompt),
         ("Character involvement", "each character has meaningful involvement" in prompt),
     ]
-    
-    print("CHARACTER INTEGRATION CHECKS:")
-    all_passed = True
-    for check_name, result in character_checks:
-        status = "✅ PASS" if result else "❌ FAIL"
-        print(f"  {status}: {check_name}")
-        if not result:
-            all_passed = False
-    
-    print("\nWORLD ELEMENT INTEGRATION CHECKS:")
-    for check_name, result in world_checks:
-        status = "✅ PASS" if result else "❌ FAIL"
-        print(f"  {status}: {check_name}")
-        if not result:
-            all_passed = False
-    
-    print("\nEXISTING OUTLINE INTEGRATION CHECKS:")
-    for check_name, result in outline_checks:
-        status = "✅ PASS" if result else "❌ FAIL"
-        print(f"  {status}: {check_name}")
-        if not result:
-            all_passed = False
-    
-    print("\nCHARACTER-FOCUSED REQUIREMENT CHECKS:")
-    for check_name, result in requirement_checks:
-        status = "✅ PASS" if result else "❌ FAIL"
-        print(f"  {status}: {check_name}")
-        if not result:
-            all_passed = False
-    
-    print(f"\n=== OVERALL RESULT ===")
-    if all_passed:
-        print("✅ ALL TESTS PASSED: Outline generation now properly includes character context!")
-    else:
-        print("❌ SOME TESTS FAILED: Character integration may not be working correctly.")
-    
-    print(f"\n=== SAMPLE PROMPT OUTPUT ===")
+
+    _log_and_assert("CHARACTER INTEGRATION CHECKS:", character_checks)
+    print()
+    _log_and_assert("WORLD ELEMENT INTEGRATION CHECKS:", world_checks)
+    print()
+    _log_and_assert("EXISTING OUTLINE INTEGRATION CHECKS:", outline_checks)
+    print()
+    _log_and_assert("CHARACTER-FOCUSED REQUIREMENT CHECKS:", requirement_checks)
+
+    print("\n=== SAMPLE PROMPT OUTPUT ===")
     print("First 1000 characters of generated prompt:")
     print("-" * 50)
     print(prompt[:1000])
     print("-" * 50)
-    
-    return all_passed
 
 
 def test_outline_prompt_without_characters():
@@ -184,44 +165,47 @@ def test_outline_prompt_without_characters():
     print("Testing outline generation with no characters...")
     
     # Should not crash and should still generate a valid prompt
-    basic_checks = [
+    basic_checks: list[Check] = [
         ("Contains story title", "Empty Story" in prompt),
         ("Contains genre", "Mystery" in prompt),
         ("Contains target chapters", "10 chapters" in prompt),
         ("Contains format instructions", "FORMAT YOUR RESPONSE" in prompt),
     ]
-    
-    all_passed = True
-    for check_name, result in basic_checks:
-        status = "✅ PASS" if result else "❌ FAIL"
-        print(f"  {status}: {check_name}")
-        if not result:
-            all_passed = False
-    
-    if all_passed:
-        print("✅ Empty context test passed: Outline generation handles missing characters gracefully")
-    else:
-        print("❌ Empty context test failed")
-    
-    return all_passed
+
+    _log_and_assert("BASIC OUTLINE CHECKS:", basic_checks)
+
+    print("✅ Empty context test passed: Outline generation handles missing characters gracefully")
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover - command line helper
     print("Testing outline generation character integration fix...\n")
-    
-    test1_passed = test_outline_prompt_includes_characters()
-    test2_passed = test_outline_prompt_without_characters()
-    
+
+    try:
+        test_outline_prompt_includes_characters()
+    except AssertionError:
+        test1_passed = False
+        print("❌ Character integration test failed")
+    else:
+        test1_passed = True
+
+    try:
+        test_outline_prompt_without_characters()
+    except AssertionError:
+        test2_passed = False
+        print("❌ Empty context test failed")
+    else:
+        test2_passed = True
+
     print(f"\n{'='*60}")
     print("FINAL TEST SUMMARY:")
     print(f"Character Integration Test: {'✅ PASSED' if test1_passed else '❌ FAILED'}")
     print(f"Empty Context Test: {'✅ PASSED' if test2_passed else '❌ FAILED'}")
-    
+
     if test1_passed and test2_passed:
         print("\n🎉 ALL TESTS PASSED! The outline generation fix is working correctly.")
         print("Characters, world elements, and existing outline data are now properly")
         print("integrated into outline generation prompts.")
     else:
         print("\n⚠️  Some tests failed. Please review the implementation.")
-    
+
     print(f"{'='*60}")
