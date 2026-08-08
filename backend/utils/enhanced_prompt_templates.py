@@ -257,6 +257,10 @@ DIALOGUE SOPHISTICATION:
             continuity_parts.append(f"Chapter {prev_ch['number']}: {prev_ch.get('title', 'Untitled')}")
             if prev_ch.get("summary"):
                 continuity_parts.append(f"  Summary: {prev_ch['summary']}")
+            if prev_ch.get("content"):
+                continuity_parts.append(
+                    f"  Closing prose excerpt: {prev_ch['content'][-1200:]}"
+                )
         
         # Add style consistency requirements
         continuity_parts.extend([

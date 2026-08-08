@@ -9,44 +9,6 @@ const api = axios.create({
   },
 });
 
-// Add request interceptor for debugging
-api.interceptors.request.use(
-  (config) => {
-    console.log('Making API request:', {
-      method: config.method,
-      url: config.url,
-      baseURL: config.baseURL,
-      fullURL: `${config.baseURL}${config.url}`,
-      data: config.data,
-    });
-    return config;
-  },
-  (error) => {
-    console.error('Request error:', error);
-    return Promise.reject(error);
-  }
-);
-
-// Add response interceptor for debugging
-api.interceptors.response.use(
-  (response) => {
-    console.log('API response:', {
-      status: response.status,
-      data: response.data,
-    });
-    return response;
-  },
-  (error) => {
-    console.error('Response error:', {
-      message: error.message,
-      code: error.code,
-      config: error.config,
-      response: error.response,
-    });
-    return Promise.reject(error);
-  }
-);
-
 // Types
 export interface Story {
   story_id: number;
@@ -83,6 +45,7 @@ export interface Chapter {
   act_id?: number;
   created_at: string;
   updated_at?: string;
+  quality_score?: number;
 }
 
 export interface Character {
@@ -126,6 +89,52 @@ export interface GenerateOutlineRequest {
 export interface GenerateCharactersRequest {
   character_count?: number;
   custom_prompt?: string;
+}
+
+export type GenerationMode = 'standard' | 'enhanced';
+
+export interface FeatureAvailabilityResponse {
+  enhanced_generation: boolean;
+  multi_pass_generation: boolean;
+  quality_analysis: boolean;
+  custom_prompting: boolean;
+}
+
+export interface EnhancedGenerationRequest {
+  custom_prompt?: string;
+  target_word_count?: number;
+  quality_check?: boolean;
+}
+
+export interface EnhancedGenerationResponse {
+  success: boolean;
+  chapter_content?: string;
+  word_count?: number;
+  target_word_count?: number;
+  quality_score?: number;
+  tokens_used?: number;
+  model_used?: string;
+  generation_attempt?: number;
+  error?: string;
+  error_type?: string;
+}
+
+export interface MultiPassGenerationResponse extends EnhancedGenerationResponse {
+  generation_method?: string;
+  passes_completed?: number;
+  total_tokens_used?: number;
+  generation_time?: number;
+}
+
+export interface QualityAnalysisResponse {
+  quality_score: number;
+  word_count: number;
+  paragraph_count: number;
+  dialogue_count: number;
+  issues: string[];
+  suggestions: string[];
+  style_consistency?: number;
+  readability_score?: number;
 }
 
 // API Functions
@@ -236,6 +245,45 @@ export const generationApi = {
     const response = await api.post(`/api/v1/generate/stories/${storyId}/chapters/${chapterNumber}`, {
       custom_prompt: customPrompt,
     });
+    return response.data;
+  },
+
+  getFeatures: async (): Promise<FeatureAvailabilityResponse> => {
+    const response = await api.get('/api/v1/features');
+    return response.data;
+  },
+
+  generateChapterEnhanced: async (
+    storyId: number,
+    chapterNumber: number,
+    data: EnhancedGenerationRequest
+  ): Promise<EnhancedGenerationResponse> => {
+    const response = await api.post(
+      `/api/v1/generate-enhanced/stories/${storyId}/chapters/${chapterNumber}`,
+      data
+    );
+    return response.data;
+  },
+
+  generateChapterMultiPass: async (
+    storyId: number,
+    chapterNumber: number,
+    data: EnhancedGenerationRequest
+  ): Promise<MultiPassGenerationResponse> => {
+    const response = await api.post(
+      `/api/v1/generate-enhanced/stories/${storyId}/chapters/${chapterNumber}/multi-pass`,
+      { target_word_count: data.target_word_count ?? 2500 }
+    );
+    return response.data;
+  },
+
+  analyzeChapterQuality: async (
+    storyId: number,
+    chapterNumber: number
+  ): Promise<QualityAnalysisResponse> => {
+    const response = await api.post(
+      `/api/v1/generate-enhanced/stories/${storyId}/chapters/${chapterNumber}/analyze-quality`
+    );
     return response.data;
   },
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   Box,
   FormControl,
@@ -16,12 +16,11 @@ import {
   LinearProgress,
 } from '@mui/material';
 import {
-  AutoAwesome,
   Speed,
   HighQuality,
   Tune,
 } from '@mui/icons-material';
-import { GenerationMode, FeatureAvailabilityResponse } from '../services/api';
+import { GenerationMode } from '../services/api';
 
 interface EnhancedGenerationControlsProps {
   generationMode: GenerationMode;

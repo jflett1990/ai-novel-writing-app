@@ -3,7 +3,7 @@ API routes for AI generation functionality.
 """
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 from typing import Optional
 import json
 
@@ -11,6 +11,7 @@ from db.database import get_db
 from models.story import Story
 from schemas.story import OutlineGenerateRequest, OutlineResponse
 from schemas.character import CharacterGenerateRequest, CharacterGenerateResponse
+from schemas.generation import ChapterExpandRequest, ChapterGenerateRequest
 from services.generation_service import GenerationService
 
 router = APIRouter()
@@ -40,11 +41,14 @@ async def generate_outline(
     
     # Generate outline
     generation_service = GenerationService(db)
-    result = await generation_service.generate_outline(
-        story_id=story_id,
-        target_chapters=request.target_chapters,
-        custom_prompt=request.custom_prompt
-    )
+    try:
+        result = await generation_service.generate_outline(
+            story_id=story_id,
+            target_chapters=request.target_chapters,
+            custom_prompt=request.custom_prompt
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     
     return result
 
@@ -53,7 +57,7 @@ async def generate_outline(
 async def generate_chapter(
     story_id: int,
     chapter_number: int,
-    custom_prompt: Optional[str] = None,
+    request: ChapterGenerateRequest,
     stream: bool = False,
     db: Session = Depends(get_db)
 ):
@@ -84,7 +88,7 @@ async def generate_chapter(
                 result_generator = generation_service.generate_chapter_stream(
                     story_id=story_id,
                     chapter_number=chapter_number,
-                    custom_prompt=custom_prompt
+                    custom_prompt=request.custom_prompt
                 )
                 async for chunk in result_generator:
                     yield f"data: {json.dumps(chunk)}\n\n"
@@ -99,7 +103,7 @@ async def generate_chapter(
         
         return StreamingResponse(
             generate_stream(),
-            media_type="text/plain",
+            media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
         )
     else:
@@ -107,10 +111,35 @@ async def generate_chapter(
         result = await generation_service.generate_chapter(
             story_id=story_id,
             chapter_number=chapter_number,
-            custom_prompt=custom_prompt,
+            custom_prompt=request.custom_prompt,
             stream=False
         )
         return result
+
+
+@router.post("/stories/{story_id}/chapters/{chapter_number}/expand")
+async def expand_chapter(
+    story_id: int,
+    chapter_number: int,
+    request: ChapterExpandRequest,
+    db: Session = Depends(get_db),
+):
+    """Expand or refine an existing chapter and preserve its previous revision."""
+    story = db.query(Story).filter(Story.story_id == story_id).first()
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+
+    service = GenerationService(db)
+    try:
+        return await service.expand_chapter(
+            story_id=story_id,
+            chapter_number=chapter_number,
+            expansion_type=request.expansion_type,
+            custom_prompt=request.custom_prompt,
+            target_length=request.target_length,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post("/stories/{story_id}/characters", response_model=CharacterGenerateResponse)
@@ -139,7 +168,8 @@ async def generate_characters(
     generation_service = GenerationService(db)
     result = await generation_service.generate_characters(
         story_id=story_id,
-        character_count=request.character_count
+        character_count=request.character_count,
+        custom_prompt=request.custom_prompt,
     )
 
     return result
@@ -318,24 +348,38 @@ async def generate_full_draft(
     story = db.query(Story).filter(Story.story_id == story_id).first()
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
-    
+
+    # The request-scoped session is closed after the response. Build a fresh
+    # session factory against the same engine for the background task.
+    task_session_factory = sessionmaker(
+        autocommit=False,
+        autoflush=False,
+        bind=db.get_bind(),
+    )
+
     async def generate_full_novel():
         """Background task to generate complete novel."""
-        generation_service = GenerationService(db)
-        
-        # First generate outline
-        outline_result = await generation_service.generate_outline(story_id)
-        if not outline_result.get("success"):
-            return
-        
-        # Then generate all chapters
-        chapters = outline_result.get("outline", {}).get("chapters", [])
-        for chapter_data in chapters:
-            chapter_number = chapter_data["number"]
-            await generation_service.generate_chapter(
-                story_id=story_id,
-                chapter_number=chapter_number
-            )
+        task_db = task_session_factory()
+        try:
+            generation_service = GenerationService(task_db)
+
+            # First generate outline
+            outline_result = await generation_service.generate_outline(story_id)
+            if not outline_result.get("success"):
+                return
+
+            # Then generate all chapters
+            chapters = outline_result.get("outline", {}).get("chapters", [])
+            for chapter_data in chapters:
+                chapter_number = chapter_data["number"]
+                chapter_result = await generation_service.generate_chapter(
+                    story_id=story_id,
+                    chapter_number=chapter_number
+                )
+                if not chapter_result.get("success"):
+                    return
+        finally:
+            task_db.close()
     
     # Add to background tasks
     background_tasks.add_task(generate_full_novel)

@@ -2,7 +2,7 @@
 Abstract base class for AI providers.
 
 This defines the interface that all AI providers must implement,
-allowing seamless switching between OpenAI, Ollama, and future providers.
+allowing seamless switching between Copilot, OpenAI, Ollama, and future providers.
 """
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, AsyncGenerator
@@ -168,6 +168,10 @@ class AIProvider(ABC):
         """
         # Rough estimation: ~4 characters per token for English text
         return len(text) // 4
+
+    async def close(self) -> None:
+        """Release provider resources, if any."""
+        return None
 
 
 class AIProviderError(Exception):

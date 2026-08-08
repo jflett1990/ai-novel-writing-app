@@ -14,7 +14,7 @@ from models.character import Character
 from models.world_element import WorldElement
 from models.chapter import Chapter, ChapterRevision
 from services.ai_providers import create_ai_provider
-from services.ai_providers.base import GenerationParams, AIProviderError
+from services.ai_providers.base import AIProvider, GenerationParams, AIProviderError
 from services.context_service import ContextService
 from utils.enhanced_prompt_templates import EnhancedPromptTemplates
 from core.config import settings
@@ -25,10 +25,10 @@ class EnhancedGenerationService:
     Advanced generation service with sophisticated prompting and quality controls.
     """
     
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, ai_provider: Optional[AIProvider] = None):
         """Initialize the enhanced generation service."""
         self.db = db
-        self.ai_provider = create_ai_provider()
+        self.ai_provider = ai_provider or create_ai_provider()
         self.context_service = ContextService(db)
         self.prompt_templates = EnhancedPromptTemplates()
         self.quality_threshold = 0.7  # Minimum quality score to accept
@@ -66,25 +66,26 @@ class EnhancedGenerationService:
         # Get previous chapters for continuity
         previous_chapters = self._get_previous_chapters(story_id, chapter_number)
         
+        prompt = self.prompt_templates.get_enhanced_chapter_prompt(
+            chapter_info=context["current_chapter"],
+            story_context=context,
+            previous_chapters=previous_chapters,
+            complexity=settings.novel_complexity,
+            target_word_count=target_word_count,
+        )
+        if custom_prompt:
+            prompt += (
+                f"\n\nADDITIONAL USER INSTRUCTIONS:\n{custom_prompt.strip()}\n\n"
+                "Follow these instructions while preserving the continuity and quality requirements above."
+            )
+
         for attempt in range(self.max_regeneration_attempts):
             try:
-                if custom_prompt:
-                    prompt = custom_prompt
-                else:
-                    # Use enhanced prompt templates
-                    prompt = self.prompt_templates.get_enhanced_chapter_prompt(
-                        chapter_info=context["current_chapter"],
-                        story_context=context,
-                        previous_chapters=previous_chapters,
-                        complexity=settings.novel_complexity,
-                        target_word_count=target_word_count
-                    )
-                
                 # Enhanced generation parameters
                 params = self._get_enhanced_generation_params(target_word_count)
                 
                 if stream:
-                    return await self._generate_chapter_stream_enhanced(
+                    return self._generate_chapter_stream_enhanced(
                         story_id, chapter_number, prompt, params, target_word_count
                     )
                 else:
@@ -212,6 +213,7 @@ class EnhancedGenerationService:
                 "quality_score": quality_score,
                 "generation_method": "multi_pass",
                 "passes_completed": 3,
+                "model_used": final_result.model_used,
                 "total_tokens_used": (
                     structure_result.tokens_used + 
                     character_result.tokens_used + 

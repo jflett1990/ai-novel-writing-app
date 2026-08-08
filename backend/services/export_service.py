@@ -1,22 +1,24 @@
-"""
-Export service for generating PDF and Markdown exports of stories.
-"""
-import os
-from typing import Optional
+"""Export service for generating Markdown and plain-text story files."""
+import re
+from pathlib import Path
 from datetime import datetime
 from sqlalchemy.orm import Session
 
 from models.story import Story
 from models.chapter import Chapter
-from db.database import get_db
 
 
 class ExportService:
     """Service for exporting stories to various formats."""
     
     def __init__(self):
-        self.export_dir = "exports"
-        os.makedirs(self.export_dir, exist_ok=True)
+        self.export_dir = Path(__file__).resolve().parents[1] / "exports"
+        self.export_dir.mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def _safe_stem(title: str) -> str:
+        stem = re.sub(r"[^A-Za-z0-9._-]+", "_", title.strip()).strip("._")
+        return (stem or "story")[:120]
     
     def export_story_markdown(self, story_id: int, db: Session) -> str:
         """
@@ -43,13 +45,11 @@ class ExportService:
         markdown_content = self._generate_markdown_content(story, chapters)
         
         # Save to file
-        filename = f"{story.title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
-        filepath = os.path.join(self.export_dir, filename)
+        filename = f"{self._safe_stem(story.title)}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+        filepath = self.export_dir / filename
+        filepath.write_text(markdown_content, encoding="utf-8")
         
-        with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(markdown_content)
-        
-        return filepath
+        return str(filepath)
     
     def export_story_text(self, story_id: int, db: Session) -> str:
         """
@@ -76,13 +76,11 @@ class ExportService:
         text_content = self._generate_text_content(story, chapters)
         
         # Save to file
-        filename = f"{story.title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-        filepath = os.path.join(self.export_dir, filename)
+        filename = f"{self._safe_stem(story.title)}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+        filepath = self.export_dir / filename
+        filepath.write_text(text_content, encoding="utf-8")
         
-        with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(text_content)
-        
-        return filepath
+        return str(filepath)
     
     def _generate_markdown_content(self, story: Story, chapters: list[Chapter]) -> str:
         """Generate Markdown content for the story."""
@@ -116,12 +114,15 @@ class ExportService:
         content.append("## Table of Contents")
         content.append("")
         for chapter in chapters:
-            content.append(f"- [Chapter {chapter.number}: {chapter.title}](#chapter-{chapter.number}-{chapter.title.lower().replace(' ', '-')})")
+            chapter_title = chapter.title or "Untitled"
+            anchor_title = re.sub(r"[^a-z0-9 -]", "", chapter_title.lower()).replace(" ", "-")
+            content.append(f"- [Chapter {chapter.number}: {chapter_title}](#chapter-{chapter.number}-{anchor_title})")
         content.append("")
         
         # Chapters
         for chapter in chapters:
-            content.append(f"## Chapter {chapter.number}: {chapter.title}")
+            chapter_title = chapter.title or "Untitled"
+            content.append(f"## Chapter {chapter.number}: {chapter_title}")
             content.append("")
             
             if chapter.summary:
@@ -182,8 +183,9 @@ class ExportService:
             if i > 0:
                 content.append("\n" + "=" * 80 + "\n")
             
-            content.append(f"CHAPTER {chapter.number}: {chapter.title.upper()}")
-            content.append("-" * (len(f"CHAPTER {chapter.number}: {chapter.title}") + 5))
+            chapter_title = chapter.title or "Untitled"
+            content.append(f"CHAPTER {chapter.number}: {chapter_title.upper()}")
+            content.append("-" * (len(f"CHAPTER {chapter.number}: {chapter_title}") + 5))
             content.append("")
             
             if chapter.summary:

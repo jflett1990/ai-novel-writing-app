@@ -16,7 +16,7 @@ from models.character import Character
 from models.world_element import WorldElement
 from models.chapter import Chapter, ChapterRevision
 from services.ai_providers import create_ai_provider
-from services.ai_providers.base import GenerationParams, AIProviderError
+from services.ai_providers.base import AIProvider, GenerationParams, AIProviderError
 from services.context_service import ContextService
 from utils.prompt_templates import PromptTemplates
 from core.config import settings
@@ -30,7 +30,7 @@ class GenerationService:
     with human-in-the-loop checkpoints as needed.
     """
     
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, ai_provider: Optional[AIProvider] = None):
         """
         Initialize the generation service.
         
@@ -38,7 +38,7 @@ class GenerationService:
             db: Database session
         """
         self.db = db
-        self.ai_provider = create_ai_provider()
+        self.ai_provider = ai_provider or create_ai_provider()
         self.context_service = ContextService(db)
         self.prompt_templates = PromptTemplates()
     
@@ -66,6 +66,18 @@ class GenerationService:
         story = self.db.query(Story).filter(Story.story_id == story_id).first()
         if not story:
             raise ValueError(f"Story with ID {story_id} not found")
+
+        # Fail before spending model credits: replacing an outline would cascade
+        # through its chapters, so never do it after prose has been written.
+        existing_content = self.db.query(Chapter.chapter_id).filter(
+            Chapter.story_id == story_id,
+            Chapter.content.isnot(None),
+        ).first()
+        if existing_content:
+            raise ValueError(
+                "This story already contains chapter prose. Refusing to replace its outline "
+                "because doing so would delete written chapters."
+            )
         
         # Use target chapters from parameter or story settings
         num_chapters = target_chapters or story.target_chapters or 20
@@ -73,17 +85,15 @@ class GenerationService:
         # Get story context
         context = self.context_service.get_story_context(story_id)
         
-        # Build the prompt
-        if custom_prompt:
-            prompt = custom_prompt
-        else:
-            prompt = self.prompt_templates.get_outline_prompt(
-                story_title=story.title,
-                story_description=story.description,
-                genre=story.genre,
-                target_chapters=num_chapters,
-                context=context
-            )
+        # Keep the required output format even when the user adds instructions.
+        prompt = self.prompt_templates.get_outline_prompt(
+            story_title=story.title,
+            story_description=story.description,
+            genre=story.genre,
+            target_chapters=num_chapters,
+            context=context
+        )
+        prompt = self._append_custom_instruction(prompt, custom_prompt)
         
         # Generate outline using AI with enhanced parameters for plot development
         params = GenerationParams.for_plot_development()
@@ -95,6 +105,13 @@ class GenerationService:
             
             # Parse the outline and create database records
             parsed_outline = self._parse_outline(outline_text, story_id)
+            if not parsed_outline.get("chapters"):
+                raise AIProviderError(
+                    "The model response could not be parsed into any chapters. "
+                    "No existing outline was changed.",
+                    settings.ai_provider,
+                    "invalid_output",
+                )
             
             # Save to database
             self._save_outline_to_db(story_id, parsed_outline)
@@ -139,16 +156,13 @@ class GenerationService:
         if not context.get("current_chapter"):
             raise ValueError(f"Chapter {chapter_number} not found in story outline")
 
-        # Build the prompt
-        if custom_prompt:
-            prompt = custom_prompt
-        else:
-            prompt = self.prompt_templates.get_chapter_prompt(
-                chapter_info=context["current_chapter"],
-                story_context=context,
-                previous_chapters=context.get("previous_chapters", []),
-                complexity=settings.novel_complexity
-            )
+        prompt = self.prompt_templates.get_chapter_prompt(
+            chapter_info=context["current_chapter"],
+            story_context=context,
+            previous_chapters=context.get("previous_chapters", []),
+            complexity=settings.novel_complexity
+        )
+        prompt = self._append_custom_instruction(prompt, custom_prompt)
 
         # Generation parameters optimized for creative writing
         params = GenerationParams.for_creative_writing()
@@ -258,10 +272,7 @@ class GenerationService:
             dict: Streaming chunks of generated content
         """
         try:
-            # Get context and build prompt (same as non-streaming)
-            context = self.context_service.get_story_context(story_id)
-
-            # Get chapter info
+            context = self.context_service.get_chapter_context(story_id, chapter_number)
             chapter = self.db.query(Chapter).filter(
                 Chapter.story_id == story_id,
                 Chapter.number == chapter_number
@@ -275,18 +286,16 @@ class GenerationService:
                 }
                 return
 
-            # Build prompt
-            if custom_prompt:
-                prompt = custom_prompt
-            else:
-                prompt = self.prompt_templates.get_chapter_generation_prompt(
-                    story_context=context,
-                    chapter_number=chapter_number,
-                    chapter_title=chapter.title,
-                    chapter_summary=chapter.summary
-                )
+            prompt = self.prompt_templates.get_chapter_prompt(
+                chapter_info=context["current_chapter"],
+                story_context=context,
+                previous_chapters=context.get("previous_chapters", []),
+                complexity=settings.novel_complexity,
+            )
+            prompt = self._append_custom_instruction(prompt, custom_prompt)
 
-            params = GenerationParams(temperature=0.7, max_tokens=4000)
+            params = GenerationParams.for_creative_writing()
+            params.max_tokens = 6000
 
             # Start streaming generation
             yield {
@@ -295,30 +304,20 @@ class GenerationService:
                 "chapter_title": chapter.title
             }
 
-            # For now, simulate streaming by generating normally and chunking
-            # In a real implementation, you'd use the AI provider's streaming API
-            result = await self.ai_provider.generate_text(prompt, params)
-            content = result.text
-
-            # Simulate streaming by sending chunks
-            chunk_size = 50  # words per chunk
-            words = content.split()
-
-            for i in range(0, len(words), chunk_size):
-                chunk_words = words[i:i + chunk_size]
-                chunk_text = " ".join(chunk_words)
-
+            content = ""
+            async for chunk_text in self.ai_provider.generate_text_stream(prompt, params):
+                content += chunk_text
                 yield {
                     "type": "content",
-                    "chunk": chunk_text + (" " if i + chunk_size < len(words) else ""),
-                    "progress": min(100, int((i + chunk_size) / len(words) * 100))
+                    "chunk": chunk_text,
+                    "word_count": len(content.split()),
                 }
 
             # Save to database
             self._save_chapter_revision(chapter)
             chapter.content = content
             chapter.is_generated = True
-            chapter.word_count = len(words)
+            chapter.update_word_count()
             self.db.commit()
 
             # Send completion
@@ -327,7 +326,6 @@ class GenerationService:
                 "success": True,
                 "chapter_id": chapter.chapter_id,
                 "word_count": chapter.word_count,
-                "tokens_used": result.tokens_used
             }
 
         except Exception as e:
@@ -434,7 +432,18 @@ class GenerationService:
             story_id: ID of the story
             outline: Parsed outline structure
         """
-        # Clear existing outline
+        # Never destroy written prose merely because a new outline was generated.
+        existing_content = self.db.query(Chapter).filter(
+            Chapter.story_id == story_id,
+            Chapter.content.isnot(None),
+        ).first()
+        if existing_content:
+            raise ValueError(
+                "This story already contains chapter prose. Refusing to replace its outline "
+                "because doing so would delete written chapters."
+            )
+
+        # Clear an outline that has no written prose.
         self.db.query(Chapter).filter(Chapter.story_id == story_id).delete()
         self.db.query(Act).filter(Act.story_id == story_id).delete()
 
@@ -499,7 +508,8 @@ class GenerationService:
     async def generate_characters(
         self,
         story_id: int,
-        character_count: Optional[int] = None
+        character_count: Optional[int] = None,
+        custom_prompt: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Generate characters for a story based on outline and genre.
@@ -518,6 +528,7 @@ class GenerationService:
             character_count=character_count or 5,
             complexity=settings.novel_complexity
         )
+        prompt = self._append_custom_instruction(prompt, custom_prompt)
 
         # Use enhanced parameters for character creation
         params = GenerationParams.for_character_creation()
@@ -536,7 +547,10 @@ class GenerationService:
                     profile=char_data.get("profile"),
                     personality=char_data.get("personality"),
                     traits=char_data.get("traits"),
-                    arc=char_data.get("arc")
+                    arc=char_data.get("arc"),
+                    appearance=(char_data.get("traits") or {}).get("appearance"),
+                    background=(char_data.get("traits") or {}).get("background"),
+                    motivations=(char_data.get("traits") or {}).get("motivation"),
                 )
                 self.db.add(character)
 
@@ -569,7 +583,10 @@ class GenerationService:
                 continue
 
             # Look for character names (usually start with number or bullet)
-            name_match = re.match(r'(?:[0-9]+\.|\*|\-)\s*([^:]+)(?::|$)', line)
+            # The prompt uses asterisks for field labels (for example
+            # ``*Type:``), so an asterisk cannot safely double as an item
+            # marker here. Numeric and dash bullets remain unambiguous.
+            name_match = re.match(r'(?:[0-9]+\.|\-)\s*([^:]+)(?::|$)', line)
             if name_match:
                 if current_character:
                     characters.append(current_character)
@@ -658,10 +675,15 @@ class GenerationService:
                 world_element = WorldElement(
                     story_id=story_id,
                     name=element_data["name"],
-                    element_type=element_data.get("type", "Location"),
+                    type=element_data.get("type", "location"),
                     description=element_data.get("description", ""),
-                    significance=element_data.get("significance", ""),
-                    details=element_data.get("details", {})
+                    category=None,
+                    importance="medium",
+                    meta={
+                        "significance": element_data.get("significance", ""),
+                        "details": element_data.get("details", {}),
+                        "story_impact": element_data.get("story_impact", ""),
+                    },
                 )
                 self.db.add(world_element)
 
@@ -693,7 +715,7 @@ class GenerationService:
                 continue
 
             # Look for element names (usually start with number or bullet)
-            name_match = re.match(r'(?:[0-9]+\.|\*|\-)\s*([^:]+)(?::|$)', line)
+            name_match = re.match(r'(?:[0-9]+\.|\-)\s*([^:]+)(?::|$)', line)
             if name_match:
                 if current_element:
                     world_elements.append(current_element)
@@ -732,3 +754,64 @@ class GenerationService:
             world_elements.append(current_element)
 
         return world_elements
+
+    async def expand_chapter(
+        self,
+        story_id: int,
+        chapter_number: int,
+        expansion_type: str = "enhance",
+        custom_prompt: Optional[str] = None,
+        target_length: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Expand or refine existing prose while preserving a revision."""
+        chapter = self.db.query(Chapter).filter(
+            Chapter.story_id == story_id,
+            Chapter.number == chapter_number,
+        ).first()
+        if not chapter or not chapter.content:
+            raise ValueError("Chapter not found or has no content to expand")
+
+        context = self.context_service.get_chapter_context(story_id, chapter_number)
+        prompt = self.prompt_templates.get_chapter_expansion_prompt(
+            original_content=chapter.content,
+            story_context=context,
+            expansion_type=expansion_type,
+            target_length=target_length,
+            custom_instruction=custom_prompt,
+        )
+
+        params = GenerationParams.for_creative_writing()
+        params.max_tokens = min(max((target_length or chapter.word_count or 2000) * 2, 1000), 12000)
+
+        try:
+            result = await self.ai_provider.generate_text(prompt, params)
+            original_word_count = chapter.word_count or len(chapter.content.split())
+            self._save_chapter_revision(chapter)
+            chapter.content = result.text
+            chapter.is_generated = True
+            chapter.update_word_count()
+            self.db.commit()
+
+            return {
+                "success": True,
+                "expanded_content": result.text,
+                "original_word_count": original_word_count,
+                "expanded_word_count": chapter.word_count,
+                "tokens_used": result.tokens_used,
+                "model_used": result.model_used,
+            }
+        except AIProviderError as exc:
+            return {
+                "success": False,
+                "error": str(exc),
+                "error_type": type(exc).__name__,
+            }
+
+    @staticmethod
+    def _append_custom_instruction(prompt: str, custom_prompt: Optional[str]) -> str:
+        if not custom_prompt:
+            return prompt
+        return (
+            f"{prompt}\n\nADDITIONAL USER INSTRUCTIONS:\n{custom_prompt.strip()}\n\n"
+            "Follow these additional instructions without ignoring the required output format."
+        )

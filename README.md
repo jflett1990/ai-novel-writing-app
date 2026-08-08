@@ -1,225 +1,171 @@
-# AI Novel Writing Application
+# AI Novel Writer
 
-A sophisticated AI-powered novel writing application that helps authors create compelling stories with advanced AI assistance and meticulously engineered prompts for human-like, original prose.
+AI Novel Writer is a FastAPI + React application for taking a story from premise to outline, characters, world building, generated chapters, revision, and export. The default generation backend is the GitHub Copilot SDK, so a local user can use an existing GitHub Copilot subscription instead of maintaining a separate model API key.
 
-## 🚀 Features
+GitHub Models is not used by this project. GitHub retired that product on July 30, 2026; the supported GitHub path here is the Copilot SDK.
 
-- **📚 Story Management**: Create and organize multiple novel projects with detailed metadata
-- **🎯 AI-Powered Outline Generation**: Generate detailed story outlines with multi-layered narratives and complex plot structures
-- **👥 Character Development**: Create rich, psychologically complex characters with detailed profiles and authentic contradictions
-- **📝 Chapter Writing**: AI-assisted chapter generation with sophisticated prose and narrative restraint
-- **🌍 World Building**: Develop immersive fictional worlds with detailed cultural, historical, and societal elements
-- **💬 Dialogue Crafting**: Generate authentic, character-specific dialogue with emotional subtext
-- **🔄 Plot Twist Generation**: Create sophisticated, believable plot twists that recontextualize previous events
-- **📤 Export Options**: Export completed works in various formats (PDF, DOCX, TXT)
-- **⚙️ Complexity Control**: Adjustable writing complexity from simple to literary sophistication
+## What works
 
-## 🛠 Technology Stack
+- Story creation and progress tracking
+- Structured outline generation with safe parsing
+- Character and world-element generation
+- Standard and enhanced chapter generation
+- True streaming generation for standard chapters
+- Previous-chapter prose continuity in generation prompts
+- Multi-pass generation and chapter quality analysis
+- Revision-preserving chapter expansion
+- Full-draft background generation
+- Markdown and plain-text export
+- Adjustable prompt complexity (`simple`, `standard`, `complex`, `literary`)
+- GitHub Copilot SDK by default, with optional direct OpenAI API and local Ollama providers
 
-### Backend
-- **FastAPI**: Modern, fast web framework for building APIs with automatic documentation
-- **SQLAlchemy**: SQL toolkit and Object-Relational Mapping (ORM) for database operations
-- **SQLite**: Lightweight database for development and small-scale deployment
-- **Pydantic**: Data validation using Python type annotations for robust API contracts
+The Copilot provider runs in SDK `empty` mode with no tools, skills, MCP servers, configuration discovery, or filesystem/shell capabilities. The model is only being used as a text-generation engine for the novel prompts.
 
-### Frontend
-- **React 18**: Modern JavaScript library for building user interfaces
-- **TypeScript**: Typed superset of JavaScript for better development experience
-- **Material-UI (MUI)**: React components implementing Google's Material Design
-- **Vite**: Fast build tool and development server with hot module replacement
+## Requirements
 
-### AI Integration
-- **OpenAI API**: GPT-4 and GPT-3.5 models for sophisticated text generation
-- **Ollama**: Local AI model support for privacy and cost control
-- **Advanced Prompt Engineering**: Meticulously crafted prompts for human-like, original writing
-- **Anti-Generic Safeguards**: Built-in protection against repetitive and clichéd AI writing patterns
+- Python 3.11 or newer (required by the current GitHub Copilot Python SDK)
+- Node.js 18 or newer and npm
+- A GitHub Copilot plan for the default provider
 
-## 🎨 Advanced Prompt Engineering
+Copilot Student users should keep `COPILOT_MODEL=auto`. GitHub's SDK supports `model="auto"`, and Student model access is through automatic model selection.
 
-This application features sophisticated prompt engineering designed to produce human-like, original writing:
+## Quick start
 
-### Core Principles
-- **Narrative Restraint**: Implies rather than explicitly states character intentions
-- **Emotional Subtext**: Layers meaning beneath surface conversations and actions
-- **Authentic Dialogue**: Realistic conversational rhythms with character-specific voices
-- **Anti-Cliché Protection**: Explicit avoidance of common literary tropes and AI writing patterns
-- **Psychological Realism**: Characters with believable contradictions and complex motivations
-
-### Quality Safeguards
-- **Anti-Repetition Rules**: Prevents word repetition and synonym lists
-- **Sentence Structure Control**: Varied length with readability limits
-- **Punctuation Enforcement**: Proper grammar and sentence completion
-- **Stream-of-Consciousness Prevention**: Blocks rambling, unfocused prose
-- **Thematic Coherence**: Ensures every element serves the narrative purpose
-
-## 🚀 Getting Started
-
-### Prerequisites
-- Python 3.8+ (3.9+ recommended)
-- Node.js 16+ (18+ recommended)
-- npm or yarn package manager
-- OpenAI API key (optional: for cloud AI) or Ollama (for local AI)
-
-### Quick Start
-
-1. **Clone the repository**:
 ```bash
-git clone https://github.com/yourusername/ai-novel-app.git
-cd ai-novel-app
+git clone https://github.com/JamesFletty/ai-novel-writing-app.git
+cd ai-novel-writing-app
+python3 setup.py
 ```
 
-2. **Backend Setup**:
+The setup script creates `backend/venv`, installs dependencies, downloads the Python Copilot runtime, copies `backend/.env.example` to `backend/.env` if needed, installs the frontend, and runs the backend tests, frontend test, and production build.
+
+### Authenticate Copilot
+
+The app does not need a model-provider API key when using your Copilot subscription. GitHub's SDK can use a locally signed-in Copilot user, supported GitHub token environment variables, or GitHub CLI credentials. For a personal local install, sign in on the machine with the GitHub account that owns your Copilot plan before generating prose.
+
+- [GitHub Copilot SDK authentication](https://docs.github.com/en/copilot/how-tos/copilot-sdk/auth/authenticate)
+- [Python SDK bundled-runtime setup](https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/bundled-cli)
+
+Do not paste or commit GitHub tokens into this repository.
+
+### Start the application
+
+Terminal 1:
+
 ```bash
 cd backend
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env  # Edit with your settings
-python -c "from db.database import init_db; init_db()"
+source venv/bin/activate          # Windows: venv\Scripts\activate
 uvicorn app:app --reload
 ```
 
-3. **Frontend Setup** (in a new terminal):
+Terminal 2:
+
 ```bash
 cd frontend
-npm install
-npm run dev
+npm start
 ```
 
-4. **Access the application**:
-   - Frontend: http://localhost:3001
-   - Backend API: http://localhost:8000
-   - API Documentation: http://localhost:8000/docs
+Open:
 
-## ⚙️ Configuration
+- Web app: http://localhost:3000
+- API: http://localhost:8000
+- Swagger API docs: http://localhost:8000/docs
+- Health check: http://localhost:8000/health
 
-### Environment Variables
+## Manual setup
 
-Create a `.env` file in the backend directory:
+Backend:
+
+```bash
+cd backend
+python3.11 -m venv venv
+source venv/bin/activate
+python -m pip install -r requirements.txt
+python -m copilot download-runtime
+cp .env.example .env
+python -c "from db.database import init_db; init_db()"
+python -m pytest -q
+uvicorn app:app --reload
+```
+
+Frontend, in another terminal:
+
+```bash
+cd frontend
+npm ci
+npm test -- --watchAll=false
+npm run build
+npm start
+```
+
+## Configuration
+
+`backend/.env.example` contains the development defaults:
 
 ```env
-# Database Configuration
+AI_PROVIDER=copilot
+COPILOT_MODEL=auto
 DATABASE_URL=sqlite:///./ai_novel_app.db
-
-# AI Provider Settings
-AI_PROVIDER=openai  # Options: openai, ollama
-OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_MODEL=gpt-4  # or gpt-3.5-turbo
-
-# Ollama Settings (for local AI)
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama2  # or other supported models
-
-# API Configuration
-API_V1_PREFIX=/api/v1
-CORS_ORIGINS=["http://localhost:3001"]
-
-# Generation Settings
-MAX_CHAPTERS_PER_STORY=50
-DEFAULT_CHAPTER_LENGTH=2000
-GENERATION_TIMEOUT=300
-
-# Writing Complexity
-NOVEL_COMPLEXITY=standard  # simple, standard, complex, literary
+CORS_ORIGINS=["http://localhost:3000"]
+NOVEL_COMPLEXITY=standard
 ```
 
-### Complexity Levels
+Provider choices:
 
-Choose from four sophistication levels:
+| Provider | Required configuration | Notes |
+| --- | --- | --- |
+| `copilot` | Copilot authentication on the host | Default. `COPILOT_MODEL=auto` works with automatic model selection. |
+| `openai` | `OPENAI_API_KEY` and `OPENAI_MODEL` | Optional direct API fallback; the model is intentionally explicit rather than hard-coded. |
+| `ollama` | `OLLAMA_BASE_URL` and `OLLAMA_MODEL` | Optional local provider. |
 
-| Level | Description | Use Case |
-|-------|-------------|----------|
-| **Simple** | Clear, straightforward storytelling | Young adult, accessible fiction |
-| **Standard** | Balanced complexity with moderate depth | Most commercial fiction |
-| **Complex** | Multi-layered narratives with advanced techniques | Literary fiction, complex plots |
-| **Literary** | Artistic prose with experimental elements | High literary fiction, artistic works |
+`COPILOT_GITHUB_TOKEN` is supported for deliberate OAuth/deployment integrations, but it should be supplied by a secret manager or process environment, not committed to `.env`. For a multi-user deployment, follow GitHub's per-user OAuth guidance instead of sharing one personal credential.
 
-## 📖 Usage Guide
+## Generation pipeline
 
-### 1. Create a New Story
-- Set title, description, genre, and target specifications
-- Choose complexity level for AI generation
-- Configure chapter count and word targets
+The normal workflow is:
 
-### 2. Generate Story Outline
-- AI creates detailed chapter-by-chapter breakdown
-- Multi-layered narrative with character arcs
-- Avoids predictable plot structures and clichés
+1. Create a story.
+2. Generate an outline.
+3. Generate or edit characters and world elements.
+4. Generate chapters in standard, enhanced, or multi-pass mode.
+5. Analyze, edit, or expand chapters; prior prose is carried forward as continuity context.
+6. Export the current manuscript as Markdown or text.
 
-### 3. Develop Characters
-- Generate psychologically complex character profiles
-- Includes contradictions, secrets, and growth potential
-- Distinctive voices and realistic motivations
+Important safety behavior: once a story contains chapter prose, regenerating its outline is rejected before an LLM call. This prevents an outline replacement from cascading into deletion of written chapters and avoids wasting AI credits.
 
-### 4. Build the World
-- Create immersive settings and cultures
-- Develop unique societal structures and histories
-- Avoid typical fantasy/sci-fi tropes
+Key API groups are available under `/api/v1/stories`, `/api/v1/generate`, `/api/v1/generate-enhanced`, `/api/v1/characters`, `/api/v1/world`, and `/api/v1/export`.
 
-### 5. Write Chapters
-- AI-assisted chapter generation with sophisticated prose
-- Maintains character voices and thematic coherence
-- Built-in quality controls prevent generic AI writing
+## Tests
 
-### 6. Refine and Export
-- Edit and enhance generated content
-- Export in multiple formats (PDF, DOCX, TXT)
-- Maintain version control and backups
+Backend:
 
-## 🔧 API Documentation
+```bash
+cd backend
+venv/bin/python -m pytest -q
+```
 
-Interactive API documentation is available when the backend is running:
+The API pipeline tests use a deterministic injected provider, so they validate the complete application workflow without consuming Copilot credits. A live Copilot call still requires valid GitHub authentication on the machine.
 
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+Frontend:
 
-### Key Endpoints
+```bash
+cd frontend
+npm test -- --watchAll=false
+npm run build
+```
 
-- `POST /api/v1/stories/` - Create new story
-- `POST /api/v1/generate/stories/{id}/outline` - Generate story outline
-- `POST /api/v1/generate/stories/{id}/characters` - Generate characters
-- `POST /api/v1/generate/stories/{id}/world` - Generate world elements
-- `POST /api/v1/generate/stories/{id}/chapters/{number}` - Generate chapter
-- `GET /api/v1/generate/complexity` - Get complexity settings
-- `POST /api/v1/generate/complexity/{level}` - Set complexity level
+## Security
 
-## 🤝 Contributing
+- `backend/.env` is local-only and must remain ignored by Git.
+- Never commit GitHub, OpenAI, or other provider tokens.
+- If a secret was ever committed in an earlier revision, removing the file from the current branch does not invalidate that secret. Rotate the credential and, if necessary, separately clean repository history.
+- The embedded Copilot session exposes no tools to the model and rejects permission requests.
 
-We welcome contributions! Please follow these steps:
+## Stack
 
-1. **Fork the repository**
-2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
-3. **Make your changes** with proper testing
-4. **Commit your changes**: `git commit -m 'Add amazing feature'`
-5. **Push to the branch**: `git push origin feature/amazing-feature`
-6. **Open a Pull Request** with detailed description
+- FastAPI, SQLAlchemy, SQLite, Pydantic
+- GitHub Copilot SDK for Python
+- React 19, TypeScript, Material UI, Create React App
+- React Router 6
 
-### Development Guidelines
-
-- Follow PEP 8 for Python code
-- Use TypeScript for all new frontend code
-- Add tests for new features
-- Update documentation for API changes
-- Ensure prompt engineering maintains quality standards
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- **OpenAI** for providing powerful language models
-- **Ollama Project** for local AI model support
-- **FastAPI Community** for excellent web framework
-- **React Team** for robust frontend library
-- **Material-UI** for beautiful, accessible components
-
-## 📞 Support
-
-- **Issues**: Report bugs and request features via GitHub Issues
-- **Discussions**: Join community discussions in GitHub Discussions
-- **Documentation**: Comprehensive guides in the `/docs` directory
-
----
-
-**Built with ❤️ for writers who demand sophisticated, original AI assistance**
+The project is licensed under the terms in [LICENSE](LICENSE).

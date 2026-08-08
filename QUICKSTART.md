@@ -1,158 +1,58 @@
-# Quick Start Guide
+# Quick Start
 
-Get your AI Novel Writing Application up and running in minutes!
+## 1. Prerequisites
 
-## 🚀 One-Command Setup
+- Python 3.11+
+- Node.js 18+ and npm
+- GitHub Copilot access for the default LLM provider
 
-Choose your preferred setup method:
+## 2. Set up everything
 
-### Option 1: Python Setup Script (Recommended - Cross-platform)
+From the repository root:
+
 ```bash
 python3 setup.py
 ```
 
-### Option 2: Bash Script (Linux/macOS)
-```bash
-./setup.sh
-```
+The setup installs both applications, downloads the Python Copilot runtime, creates a local `.env` from `.env.example`, and runs the test/build checks.
 
-### Option 3: Windows Batch Script
-```cmd
-setup.bat
-```
+For local Copilot use, authenticate the machine with the GitHub account that owns your Copilot plan. The SDK supports stored Copilot CLI credentials and GitHub CLI credentials; see the [GitHub authentication guide](https://docs.github.com/en/copilot/how-tos/copilot-sdk/auth/authenticate). No separate LLM API key is required for this default path.
 
-## 📋 Prerequisites
+## 3. Run it
 
-Before running the setup script, ensure you have:
+Backend:
 
-- **Python 3.8+** ([Download](https://python.org/downloads/))
-- **Node.js 16+** ([Download](https://nodejs.org/))
-- **OpenAI API Key** ([Get one here](https://platform.openai.com/api-keys))
-
-## ⚡ Manual Setup (if scripts don't work)
-
-### Backend Setup
 ```bash
 cd backend
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-python -c "from db.database import init_db; init_db()"
-```
-
-### Frontend Setup
-```bash
-cd frontend
-npm install
-```
-
-### Environment Configuration
-Edit `backend/.env` with your OpenAI API key:
-```env
-OPENAI_API_KEY=your_actual_api_key_here
-```
-
-## 🏃‍♂️ Running the Application
-
-### Start Backend (Terminal 1)
-```bash
-cd backend
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate          # Windows: venv\Scripts\activate
 uvicorn app:app --reload
 ```
 
-### Start Frontend (Terminal 2)
+Frontend:
+
 ```bash
 cd frontend
-npm run dev
+npm start
 ```
 
-### Access the Application
-- **Frontend**: http://localhost:3001
-- **API Documentation**: http://localhost:8000/docs
-- **API**: http://localhost:8000
+Then visit http://localhost:3000. API docs are at http://localhost:8000/docs.
 
-## 🎯 First Steps
+## 4. Default configuration
 
-1. **Create a Story**: Click "Create New Story" and fill in the details
-2. **Set Complexity**: Choose your writing sophistication level
-3. **Generate Outline**: Let AI create a detailed chapter breakdown
-4. **Develop Characters**: Generate rich, complex character profiles
-5. **Build the World**: Create immersive world elements
-6. **Write Chapters**: Generate sophisticated prose with AI assistance
-
-## 🔧 Configuration Options
-
-### AI Provider Options
-
-**OpenAI (Cloud)**:
 ```env
-AI_PROVIDER=openai
-OPENAI_API_KEY=your_key_here
-OPENAI_MODEL=gpt-4
+AI_PROVIDER=copilot
+COPILOT_MODEL=auto
+CORS_ORIGINS=["http://localhost:3000"]
 ```
 
-**Ollama (Local)**:
-```env
-AI_PROVIDER=ollama
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama2
-```
+Keep `COPILOT_MODEL=auto` for Copilot Student. Optional `openai` and `ollama` fallbacks are documented in [README.md](README.md).
 
-### Complexity Levels
-- **Simple**: Clear, accessible storytelling
-- **Standard**: Balanced complexity (default)
-- **Complex**: Multi-layered narratives
-- **Literary**: Artistic, experimental prose
+## Troubleshooting
 
-## 🐛 Troubleshooting
+- `No module named ...`: activate `backend/venv` and reinstall `requirements.txt`.
+- Copilot runtime missing: run `python -m copilot download-runtime` inside the backend virtual environment.
+- Copilot authentication failure: sign in to GitHub/Copilot on the host and confirm that account has Copilot access.
+- Port 8000 busy: start Uvicorn with `--port 8001` and set `REACT_APP_API_URL` for the frontend accordingly.
+- Port 3000 busy: Create React App will offer another port; add that origin to `CORS_ORIGINS` before using it.
 
-### Common Issues
-
-**"Module not found" errors**:
-```bash
-cd backend
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-**"Port already in use"**:
-- Backend: Change port with `uvicorn app:app --port 8001`
-- Frontend: Change port in `package.json` or use different terminal
-
-**Database errors**:
-```bash
-cd backend
-python -c "from db.database import init_db; init_db()"
-```
-
-**OpenAI API errors**:
-- Check your API key in `backend/.env`
-- Verify you have credits in your OpenAI account
-- Ensure the model name is correct (gpt-4, gpt-3.5-turbo, etc.)
-
-### Getting Help
-
-1. Check the [full README](README.md) for detailed documentation
-2. Review API docs at http://localhost:8000/docs
-3. Open an issue on GitHub for bugs
-4. Check your browser console for frontend errors
-
-## 🔒 Security Notes
-
-- **Never commit your `.env` file** to version control
-- **Regenerate API keys** if accidentally exposed
-- **Use environment variables** for production deployment
-- **Keep dependencies updated** for security patches
-
-## 🎉 You're Ready!
-
-Your AI Novel Writing Application is now running with:
-- ✅ Sophisticated prompt engineering
-- ✅ Anti-generic AI writing safeguards  
-- ✅ Character development tools
-- ✅ World building features
-- ✅ Export functionality
-- ✅ Complexity control system
-
-Start creating your masterpiece! 📚✨
+Never commit `backend/.env` or credentials.

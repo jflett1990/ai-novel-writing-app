@@ -240,6 +240,10 @@ class PromptTemplates:
                 prompt_parts.append(f"Chapter {prev_ch['number']}: {prev_ch.get('title', 'Untitled')}")
                 if prev_ch.get("summary"):
                     prompt_parts.append(f"  Summary: {prev_ch['summary']}")
+                if prev_ch.get("content_excerpt"):
+                    prompt_parts.append(
+                        f"  Closing prose excerpt: {prev_ch['content_excerpt'][-1200:]}"
+                    )
         
         # Current chapter instructions
         prompt_parts.extend([

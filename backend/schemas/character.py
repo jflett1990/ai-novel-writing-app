@@ -1,7 +1,7 @@
 """
 Pydantic schemas for Character-related API endpoints.
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, Dict, Any
 
 
@@ -38,11 +38,10 @@ class CharacterUpdate(BaseModel):
 
 class CharacterResponse(CharacterBase):
     """Schema for Character response."""
+    model_config = ConfigDict(from_attributes=True)
+
     character_id: int
     story_id: int
-    
-    class Config:
-        from_attributes = True
 
 
 class CharacterGenerateRequest(BaseModel):

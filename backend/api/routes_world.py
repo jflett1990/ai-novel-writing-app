@@ -19,6 +19,12 @@ from schemas.world_element import (
 router = APIRouter()
 
 
+@router.get("/types", response_model=WorldElementTypesResponse)
+async def get_world_element_types():
+    """Get available world element types for UI controls."""
+    return {"types": WorldElement.get_common_types()}
+
+
 @router.get("/story/{story_id}", response_model=List[WorldElementResponse])
 async def get_story_world_elements(
     story_id: int,
@@ -168,7 +174,7 @@ async def update_world_element(
         raise HTTPException(status_code=404, detail="World element not found")
     
     # Update fields
-    update_data = element_update.dict(exclude_unset=True)
+    update_data = element_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(element, field, value)
     
@@ -199,15 +205,3 @@ async def delete_world_element(
     db.delete(element)
     db.commit()
     return {"message": "World element deleted successfully"}
-
-
-@router.get("/types", response_model=WorldElementTypesResponse)
-async def get_world_element_types():
-    """
-    Get available world element types.
-    
-    Returns:
-        List of available world element types
-    """
-    types = WorldElement.get_common_types()
-    return {"types": types}

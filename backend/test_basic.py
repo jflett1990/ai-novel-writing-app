@@ -50,7 +50,7 @@ def test_config():
 
     assert settings.project_name
     assert settings.api_v1_prefix.startswith("/")
-    assert settings.ai_provider in {"openai", "ollama"}
+    assert settings.ai_provider in {"copilot", "openai", "ollama"}
 
     print("\n✅ Configuration test passed!")
 

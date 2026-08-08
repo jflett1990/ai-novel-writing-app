@@ -26,7 +26,6 @@ import {
   InputLabel,
   Select,
   Snackbar,
-  Fab,
 } from '@mui/material';
 import {
   Save,
@@ -34,15 +33,11 @@ import {
   ArrowBack,
   Edit,
   Visibility,
-  ExpandMore,
   TrendingUp,
   FormatSize,
   Palette,
   Settings,
-  Speed,
   HighQuality,
-  Analytics,
-  Refresh,
 } from '@mui/icons-material';
 import { 
   storyApi, 

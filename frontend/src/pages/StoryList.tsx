@@ -18,7 +18,7 @@ import {
   Chip,
   LinearProgress,
 } from '@mui/material';
-import { Add, Edit, Delete, Visibility } from '@mui/icons-material';
+import { Add, Delete, Visibility } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { storyApi, Story, CreateStoryRequest, generationApi } from '../services/api';
 

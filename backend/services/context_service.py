@@ -99,6 +99,9 @@ class ContextService:
                 "title": ch.title,
                 "summary": ch.summary,
                 "word_count": ch.word_count,
+                # The ending of recent prose is more useful for continuity than
+                # metadata alone and keeps prompt growth bounded.
+                "content_excerpt": (ch.content or "")[-2500:],
             }
             for ch in previous_chapters
         ]
