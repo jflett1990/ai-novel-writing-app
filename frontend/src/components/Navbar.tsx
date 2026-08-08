@@ -1,36 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { AppBar, Toolbar, Typography, Button, Box, Chip, Menu, MenuItem } from '@mui/material';
+import React from 'react';
+import { AppBar, Toolbar, Typography, Button, Box } from '@mui/material';
 import { Link, useNavigate } from 'react-router-dom';
-import { AutoStories, Add, Settings } from '@mui/icons-material';
-import { generationApi } from '../services/api';
+import { AutoStories, Add } from '@mui/icons-material';
 
 const Navbar: React.FC = () => {
   const navigate = useNavigate();
-  const [complexityInfo, setComplexityInfo] = useState<any>(null);
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-
-  useEffect(() => {
-    loadComplexityInfo();
-  }, []);
-
-  const loadComplexityInfo = async () => {
-    try {
-      const data = await generationApi.getComplexity();
-      setComplexityInfo(data);
-    } catch (error) {
-      console.error('Failed to load complexity info:', error);
-    }
-  };
-
-  const handleComplexityChange = async (level: string) => {
-    try {
-      await generationApi.setComplexity(level);
-      setComplexityInfo({ ...complexityInfo, current_complexity: level });
-      setAnchorEl(null);
-    } catch (error) {
-      console.error('Failed to set complexity:', error);
-    }
-  };
 
   return (
     <AppBar position="static" elevation={2}>

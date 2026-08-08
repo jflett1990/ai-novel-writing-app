@@ -13,7 +13,6 @@ import {
   Collapse,
   Alert,
   CircularProgress,
-  Divider,
   LinearProgress,
 } from '@mui/material';
 import {
@@ -22,10 +21,8 @@ import {
   ExpandLess,
   CheckCircle,
   Warning,
-  Error,
   Lightbulb,
   Assessment,
-  TrendingUp,
   FormatQuote,
   Article,
 } from '@mui/icons-material';

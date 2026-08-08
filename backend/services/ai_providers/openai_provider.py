@@ -23,7 +23,7 @@ class OpenAIProvider(AIProvider):
     """
     OpenAI provider implementation.
     
-    Uses OpenAI's API for text generation with models like GPT-4, GPT-3.5-turbo.
+    Uses OpenAI's API for text generation when explicitly configured.
     """
     
     def __init__(self, config: Dict[str, Any]):
@@ -36,11 +36,13 @@ class OpenAIProvider(AIProvider):
         super().__init__(config)
         
         self.api_key = config.get("api_key")
-        self.model = config.get("model", "gpt-4")
+        self.model = config.get("model")
         self.organization = config.get("organization")
         
         if not self.api_key:
             raise AIProviderError("OpenAI API key is required", "openai")
+        if not self.model:
+            raise AIProviderError("OpenAI model is required via OPENAI_MODEL", "openai")
         
         # Initialize async client
         self.client = AsyncOpenAI(
@@ -158,24 +160,11 @@ class OpenAIProvider(AIProvider):
     
     def get_model_info(self) -> Dict[str, Any]:
         """Get information about the current OpenAI model."""
-        model_info = {
+        return {
             "name": self.model,
             "provider": "openai",
             "type": "chat",
         }
-        
-        # Add known context lengths for common models
-        context_lengths = {
-            "gpt-4": 8192,
-            "gpt-4-32k": 32768,
-            "gpt-3.5-turbo": 4096,
-            "gpt-3.5-turbo-16k": 16384,
-        }
-        
-        if self.model in context_lengths:
-            model_info["context_length"] = context_lengths[self.model]
-        
-        return model_info
     
     def estimate_tokens(self, text: str) -> int:
         """

@@ -1,8 +1,8 @@
 """
 Export API routes for downloading stories in various formats.
 """
-import os
-from fastapi import APIRouter, Depends, HTTPException, Response
+from pathlib import Path
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -38,12 +38,11 @@ async def export_story_markdown(
         filepath = export_service.export_story_markdown(story_id, db)
         
         # Return file
-        filename = f"{story.title.replace(' ', '_')}.md"
+        filename = Path(filepath).name
         return FileResponse(
             path=filepath,
             filename=filename,
             media_type="text/markdown",
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
         )
         
     except ValueError as e:
@@ -77,12 +76,11 @@ async def export_story_text(
         filepath = export_service.export_story_text(story_id, db)
         
         # Return file
-        filename = f"{story.title.replace(' ', '_')}.txt"
+        filename = Path(filepath).name
         return FileResponse(
             path=filepath,
             filename=filename,
             media_type="text/plain",
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
         )
         
     except ValueError as e:
@@ -124,11 +122,11 @@ async def preview_story_export(
             raise HTTPException(status_code=400, detail="Invalid format. Use 'markdown' or 'text'")
         
         # Read the content
-        with open(filepath, 'r', encoding='utf-8') as f:
-            content = f.read()
+        path = Path(filepath)
+        content = path.read_text(encoding="utf-8")
         
         # Clean up the temporary file
-        os.remove(filepath)
+        path.unlink(missing_ok=True)
         
         return {
             "story_id": story_id,

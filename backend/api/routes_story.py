@@ -26,7 +26,23 @@ from services.generation_service import GenerationService
 router = APIRouter()
 
 
-@router.get("/", response_model=List[StoryResponse])
+def _story_detail(db: Session, story: Story) -> dict:
+    """Build the summary payload used by both list and detail views."""
+    acts = db.query(Act).filter(Act.story_id == story.story_id).order_by(Act.number).all()
+    chapters = db.query(Chapter).filter(
+        Chapter.story_id == story.story_id
+    ).order_by(Chapter.number).all()
+    return {
+        **story.__dict__,
+        "acts": acts,
+        "chapters": chapters,
+        "character_count": db.query(Character).filter(Character.story_id == story.story_id).count(),
+        "world_element_count": db.query(WorldElement).filter(WorldElement.story_id == story.story_id).count(),
+        "total_word_count": sum(ch.word_count or 0 for ch in chapters),
+    }
+
+
+@router.get("/", response_model=List[StoryDetailResponse])
 async def list_stories(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
@@ -44,7 +60,7 @@ async def list_stories(
         List of stories
     """
     stories = db.query(Story).offset(skip).limit(limit).all()
-    return stories
+    return [_story_detail(db, story) for story in stories]
 
 
 @router.post("/", response_model=StoryResponse)
@@ -96,26 +112,7 @@ async def get_story(
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
     
-    # Get related data
-    acts = db.query(Act).filter(Act.story_id == story_id).order_by(Act.number).all()
-    chapters = db.query(Chapter).filter(Chapter.story_id == story_id).order_by(Chapter.number).all()
-    character_count = db.query(Character).filter(Character.story_id == story_id).count()
-    world_element_count = db.query(WorldElement).filter(WorldElement.story_id == story_id).count()
-    
-    # Calculate total word count
-    total_word_count = sum(ch.word_count for ch in chapters if ch.word_count)
-    
-    # Prepare response
-    response_data = {
-        **story.__dict__,
-        "acts": acts,
-        "chapters": chapters,
-        "character_count": character_count,
-        "world_element_count": world_element_count,
-        "total_word_count": total_word_count
-    }
-    
-    return response_data
+    return _story_detail(db, story)
 
 
 @router.put("/{story_id}", response_model=StoryResponse)
@@ -140,7 +137,7 @@ async def update_story(
         raise HTTPException(status_code=404, detail="Story not found")
     
     # Update fields
-    update_data = story_update.dict(exclude_unset=True)
+    update_data = story_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(story, field, value)
     
@@ -261,7 +258,7 @@ async def update_chapter(
         raise HTTPException(status_code=404, detail="Chapter not found")
     
     # Update fields
-    update_data = chapter_update.dict(exclude_unset=True)
+    update_data = chapter_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(chapter, field, value)
     

@@ -133,7 +133,7 @@ async def update_character(
         raise HTTPException(status_code=404, detail="Character not found")
     
     # Update fields
-    update_data = character_update.dict(exclude_unset=True)
+    update_data = character_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(character, field, value)
     

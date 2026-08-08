@@ -1,7 +1,7 @@
 """
 Pydantic schemas for WorldElement-related API endpoints.
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, Dict, Any, List
 
 
@@ -32,11 +32,10 @@ class WorldElementUpdate(BaseModel):
 
 class WorldElementResponse(WorldElementBase):
     """Schema for WorldElement response."""
+    model_config = ConfigDict(from_attributes=True)
+
     element_id: int
     story_id: int
-    
-    class Config:
-        from_attributes = True
 
 
 class WorldElementTypesResponse(BaseModel):

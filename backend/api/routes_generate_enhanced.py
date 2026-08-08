@@ -3,16 +3,20 @@ Enhanced API routes for AI generation functionality.
 
 Updated to use the enhanced generation service for better quality output.
 """
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from typing import Optional
 import json
 
 from db.database import get_db
 from models.story import Story
 from schemas.story import OutlineGenerateRequest, OutlineResponse
 from schemas.character import CharacterGenerateRequest, CharacterGenerateResponse
+from schemas.generation import (
+    EnhancedChapterGenerateRequest,
+    MultiPassGenerateRequest,
+    RegenerateChapterRequest,
+)
 from services.enhanced_generation_service import EnhancedGenerationService
 from services.generation_service import GenerationService  # Keep original for fallback
 from core.config import settings
@@ -49,9 +53,7 @@ async def generate_outline(
 async def generate_chapter_enhanced(
     story_id: int,
     chapter_number: int,
-    custom_prompt: Optional[str] = None,
-    target_word_count: int = Query(2500, ge=1500, le=5000, description="Target word count for the chapter"),
-    quality_check: bool = Query(True, description="Enable quality assessment and regeneration"),
+    request: EnhancedChapterGenerateRequest,
     stream: bool = False,
     db: Session = Depends(get_db)
 ):
@@ -81,14 +83,15 @@ async def generate_chapter_enhanced(
         # Return streaming response
         async def generate_stream():
             try:
-                async for chunk in enhanced_service.generate_chapter_enhanced(
+                result_generator = await enhanced_service.generate_chapter_enhanced(
                     story_id=story_id,
                     chapter_number=chapter_number,
-                    custom_prompt=custom_prompt,
-                    target_word_count=target_word_count,
+                    custom_prompt=request.custom_prompt,
+                    target_word_count=request.target_word_count,
                     stream=True,
-                    quality_check=quality_check
-                ):
+                    quality_check=request.quality_check
+                )
+                async for chunk in result_generator:
                     yield f"data: {json.dumps(chunk)}\n\n"
             except Exception as e:
                 error_chunk = {
@@ -101,7 +104,7 @@ async def generate_chapter_enhanced(
         
         return StreamingResponse(
             generate_stream(),
-            media_type="text/plain",
+            media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
         )
     else:
@@ -109,10 +112,10 @@ async def generate_chapter_enhanced(
         result = await enhanced_service.generate_chapter_enhanced(
             story_id=story_id,
             chapter_number=chapter_number,
-            custom_prompt=custom_prompt,
-            target_word_count=target_word_count,
+            custom_prompt=request.custom_prompt,
+            target_word_count=request.target_word_count,
             stream=False,
-            quality_check=quality_check
+            quality_check=request.quality_check
         )
         return result
 
@@ -121,7 +124,7 @@ async def generate_chapter_enhanced(
 async def generate_chapter_multi_pass(
     story_id: int,
     chapter_number: int,
-    target_word_count: int = Query(2500, ge=1500, le=5000),
+    request: MultiPassGenerateRequest,
     db: Session = Depends(get_db)
 ):
     """
@@ -144,7 +147,7 @@ async def generate_chapter_multi_pass(
     result = await enhanced_service.generate_chapter_multi_pass(
         story_id=story_id,
         chapter_number=chapter_number,
-        target_word_count=target_word_count
+        target_word_count=request.target_word_count
     )
     
     return result
@@ -179,9 +182,13 @@ async def analyze_chapter_quality(
     enhanced_service = EnhancedGenerationService(db)
     previous_chapters = enhanced_service._get_previous_chapters(story_id, chapter_number)
     
+    target_word_count = max(
+        1500,
+        min(5000, round((story.target_word_count or 50000) / max(story.target_chapters or 20, 1))),
+    )
     quality_score = enhanced_service._assess_content_quality(
-        chapter.content, 
-        chapter.word_count or 2000, 
+        chapter.content,
+        target_word_count,
         previous_chapters
     )
     
@@ -226,8 +233,7 @@ async def analyze_chapter_quality(
 async def regenerate_chapter_with_feedback(
     story_id: int,
     chapter_number: int,
-    feedback: str = Query(..., description="Specific feedback on what to improve"),
-    target_word_count: int = Query(2500, ge=1500, le=5000),
+    request: RegenerateChapterRequest,
     db: Session = Depends(get_db)
 ):
     """
@@ -246,32 +252,11 @@ async def regenerate_chapter_with_feedback(
     
     enhanced_service = EnhancedGenerationService(db)
     
-    # Get existing context
-    context = enhanced_service.context_service.get_chapter_context(story_id, chapter_number)
-    previous_chapters = enhanced_service._get_previous_chapters(story_id, chapter_number)
-    
-    # Build enhanced prompt with feedback
-    enhanced_prompt = enhanced_service.prompt_templates.get_enhanced_chapter_prompt(
-        chapter_info=context["current_chapter"],
-        story_context=context,
-        previous_chapters=previous_chapters,
-        complexity=settings.novel_complexity,
-        target_word_count=target_word_count
-    )
-    
-    # Add feedback-specific instructions
-    feedback_prompt = f"""{enhanced_prompt}
-
-SPECIFIC IMPROVEMENT REQUIREMENTS BASED ON FEEDBACK:
-{feedback}
-
-CRITICAL: Address all feedback points while maintaining the enhanced writing standards above."""
-    
     result = await enhanced_service.generate_chapter_enhanced(
         story_id=story_id,
         chapter_number=chapter_number,
-        custom_prompt=feedback_prompt,
-        target_word_count=target_word_count,
+        custom_prompt=f"Specific revision feedback: {request.feedback}",
+        target_word_count=request.target_word_count,
         quality_check=True
     )
     
